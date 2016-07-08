@@ -20,7 +20,7 @@ Sometimes useful to have several mounted filesystem, like "/" - is your root nat
 ```C++
 std::string zipPassword = "123";
 
-FileSystemPtr root_fs(new CNativeFileSystem(GetBundlePath() + "Documents/"));
+IFileSystemPtr root_fs(new CNativeFileSystem(GetBundlePath() + "Documents/"));
 IFileSystemPtr zip_fs(new CZipFileSystem("Resources.zip", "/", false, zipPassword));
 IFileSystemPtr mem_fs(new CMemoryFileSystem());
 
@@ -45,7 +45,7 @@ if (userAvatarFile && userAvatarFile->IsOpened())
 {
 	// Load avatar from network and store it in memory
 	...
-	userAvatarFile->Write(data, data.size());
+	userAvatarFile->Write(&data[0], data.size());
 	userAvatarFile->Close();
 }
 
