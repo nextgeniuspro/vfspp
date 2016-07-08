@@ -2,7 +2,7 @@
 
 vfspp - C++ Virtual File System that allow to manipulate with files from memory, zip archives or native filesystems like it is just native filesystem. It is useful for game developers to use resources in native filesystem during development and then pack their to the archive in distribution build. 
 
-```
+```C++
 // Register native filesystem during developnment or zip for distribution build
 IFileSystemPtr root_fs = nullptr;
 #if !defined(DISTRIBUTION_BUILD)
@@ -17,7 +17,7 @@ vfs_get_global()->AddFileSystem("/", root_fs);
 
 Sometimes useful to have several mounted filesystem, like "/" - is you root native filesystem, "/tmp" - memory filesystem, which allow to work with temporary files without disk operations, "/resources" - zip filesystem with game resources.
 
-```
+```C++
 std::string zipPassword = "123";
 
 FileSystemPtr root_fs(new CNativeFileSystem(GetBundlePath() + "Documents/"));
