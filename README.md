@@ -15,7 +15,7 @@ root_fs->Initialize();
 vfs_get_global()->AddFileSystem("/", root_fs);
 ```
 
-Sometimes useful to have several mounted filesystem, like "/" - is you root native filesystem, "/tmp" - memory filesystem, which allow to work with temporary files without disk operations, "/resources" - zip filesystem with game resources.
+Sometimes useful to have several mounted filesystem, like "/" - is your root native filesystem, "/tmp" - memory filesystem, which allow to work with temporary files without disk operations, "/resources" - zip filesystem with game resources.
 
 ```C++
 std::string zipPassword = "123";
@@ -37,12 +37,14 @@ IFilePtr saveFile = vfs->OpenFile(CFileInfo("/savefile.sav"), IFile::In);
 if (saveFile && saveFile->IsOpened())
 {
     // Parse game save
+    ...
 }
 
 IFilePtr userAvatarFile = vfs->OpenFile(CFileInfo("/tmp/avatar.jpg"), IFile::ReadWrite);
 if (userAvatarFile && userAvatarFile->IsOpened())
 {
 	// Load avatar from network and store it in memory
+	...
 	userAvatarFile->Write(data, data.size());
 	userAvatarFile->Close();
 }
@@ -51,6 +53,7 @@ IFilePtr textureFile = vfs->OpenFile(CFileInfo("/resources/background.pvr"), IFi
 if (textureFile && textureFile->IsOpened())
 {
 	// Create texture
+	...
 }
 ```
 
@@ -61,7 +64,7 @@ cmake .
 make
 ```
 
-Use CMAKE_INSTALL_PREFIX to change instalation directory
+Use CMAKE_INSTALL_PREFIX to change installation directory
 
 ```
 cmake -DCMAKE_INSTALL_PREFIX=/usr
