@@ -83,5 +83,5 @@ cmake -G "Visual Studio 14 2015 Win64" .
 Add parameter WITH_EXAMPLES to build with example project
 
 ```
-cmake -G Xcode . -DWITH_EXAMPLES=1
+cmake -G Xcode . -DCMAKE_INSTALL_PREFIX=./build -DWITH_EXAMPLES=1
 ```

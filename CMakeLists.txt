@@ -1,8 +1,9 @@
-cmake_minimum_required(VERSION 2.4.4)
+cmake_minimum_required(VERSION 2.8)
 set(CMAKE_ALLOW_LOOSE_LOOP_CONSTRUCTS ON)
 
-project(vfspp)
+include(ExternalProject)
 
+project(vfspp)
 set(VERSION "1.0.0")
 
 set(INSTALL_BIN_DIR "${CMAKE_INSTALL_PREFIX}/bin" CACHE PATH "Installation directory for executables")
@@ -15,62 +16,49 @@ set(INSTALL_PKGCONFIG_DIR "${CMAKE_INSTALL_PREFIX}/share/pkgconfig" CACHE PATH "
 # zlib
 #============================================================================
 
-set(ZLIB_HDRS_DIR zlib/src/)
-set(ZLIB_SRCS_DIR zlib/src/)
-set(MINIZIP_HDRS_DIR zlib/src/contrib/minizip/)
-set(MINIZIP_SRCS_DIR zlib/src/contrib/minizip/)
+if(UNIX)
+    set(ZLIB_NAME z)
+else()
+    set(ZLIB_NAME zlibstatic)
+endif()
+set(ZLIB_DIR ${CMAKE_SOURCE_DIR}/external/zlib/)
 
-set(ZLIB_PUBLIC_HDRS
-    ${ZLIB_HDRS_DIR}/zconf.h
-    ${ZLIB_HDRS_DIR}/zlib.h
+ExternalProject_Add(zlib
+    SOURCE_DIR ${ZLIB_DIR}
+    PREFIX ${CMAKE_INSTALL_PREFIX}/zlib
+    INSTALL_DIR ${CMAKE_INSTALL_PREFIX}
+    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}
 )
 
-set(ZLIB_PRIVATE_HDRS
-    ${ZLIB_HDRS_DIR}/crc32.h
-    ${ZLIB_SRCS_DIR}/deflate.h
-    ${ZLIB_HDRS_DIR}/gzguts.h
-    ${ZLIB_HDRS_DIR}/inffast.h
-    ${ZLIB_HDRS_DIR}/inffixed.h
-    ${ZLIB_HDRS_DIR}/inflate.h
-    ${ZLIB_HDRS_DIR}/inftrees.h
-    ${ZLIB_HDRS_DIR}/trees.h
-    ${ZLIB_HDRS_DIR}/zutil.h
-)
+#============================================================================
+# minizip
+#============================================================================
 
-set(ZLIB_SRCS
-    ${ZLIB_SRCS_DIR}/adler32.c
-    ${ZLIB_SRCS_DIR}/compress.c
-    ${ZLIB_SRCS_DIR}/crc32.c
-    ${ZLIB_SRCS_DIR}/deflate.c
-    ${ZLIB_SRCS_DIR}/gzclose.c
-    ${ZLIB_SRCS_DIR}/gzlib.c
-    ${ZLIB_SRCS_DIR}/gzread.c
-    ${ZLIB_SRCS_DIR}/gzwrite.c
-    ${ZLIB_SRCS_DIR}/inflate.c
-    ${ZLIB_SRCS_DIR}/infback.c
-    ${ZLIB_SRCS_DIR}/inftrees.c
-    ${ZLIB_SRCS_DIR}/inffast.c
-    ${ZLIB_SRCS_DIR}/trees.c
-    ${ZLIB_SRCS_DIR}/uncompr.c
-    ${ZLIB_SRCS_DIR}/zutil.c
-)
+set(MINIZIP_DIR ${ZLIB_DIR}/contrib/minizip)
 
 set(MINIZIP_HDRS
-    ${MINIZIP_HDRS_DIR}/crypt.h
-    ${MINIZIP_HDRS_DIR}/ioapi.h
-    ${MINIZIP_HDRS_DIR}/iowin32.h
-    ${MINIZIP_HDRS_DIR}/mztools.h
-    ${MINIZIP_HDRS_DIR}/unzip.h
-    ${MINIZIP_HDRS_DIR}/zip.h
+    ${MINIZIP_DIR}/crypt.h
+    ${MINIZIP_DIR}/ioapi.h
+    ${MINIZIP_DIR}/mztools.h
+    ${MINIZIP_DIR}/unzip.h
+    ${MINIZIP_DIR}/zip.h
 )
 
 set(MINIZIP_SRCS
-    ${MINIZIP_SRCS_DIR}/ioapi.c
-    ${MINIZIP_SRCS_DIR}/iowin32.c
-    ${MINIZIP_SRCS_DIR}/mztools.c
-    ${MINIZIP_SRCS_DIR}/unzip.c
-    ${MINIZIP_SRCS_DIR}/zip.c
+    ${MINIZIP_DIR}/ioapi.c
+    ${MINIZIP_DIR}/mztools.c
+    ${MINIZIP_DIR}/unzip.c
+    ${MINIZIP_DIR}/zip.c
 )
+
+if(WIN32)
+    set(MINIZIP_HDRS ${MINIZIP_HDRS} ${MINIZIP_DIR}/iowin32.h)
+    set(MINIZIP_SRCS ${MINIZIP_SRCS} ${MINIZIP_DIR}/iowin32.c)
+endif()
+
+add_library(minizip ${MINIZIP_SRCS} ${MINIZIP_HDRS})
+add_dependencies(minizip zlib)
+target_link_libraries(minizip ${ZLIB_NAME})
 
 #============================================================================
 # vfspp
@@ -110,9 +98,9 @@ set(LIBVFSPP_SRCS
     ${LIBVFSPP_SRCS_DIR}/CZipFileSystem.cpp
 )
 
+include_directories(${INSTALL_INC_DIR})
+include_directories(${MINIZIP_DIR})
 include_directories(${LIBVFSPP_PUBLIC_HDRS_DIR})
-include_directories(${ZLIB_HDRS_DIR})
-include_directories(${MINIZIP_HDRS_DIR})
 
 if(MSVC)
     set(CMAKE_DEBUG_POSTFIX "d")
@@ -121,15 +109,14 @@ if(MSVC)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 
-#if(__APPLE__)
+if(APPLE)
     set(CMAKE_MACOSX_RPATH 1)
-#endif
+endif()
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++11 -stdlib=libc++ -fno-rtti -g -Wall")
 
 add_library(${PROJECT_NAME} STATIC ${LIBVFSPP_SRCS} ${LIBVFSPP_HDRS})
-add_library(zlib ${ZLIB_SRCS} ${MINIZIP_SRCS} ${ZLIB_PUBLIC_HDRS} ${ZLIB_PRIVATE_HDRS} ${MINIZIP_HDRS})
-target_link_libraries(${PROJECT_NAME} zlib)
+target_link_libraries(${PROJECT_NAME} minizip)
 
 if(NOT SKIP_INSTALL_LIBRARIES AND NOT SKIP_INSTALL_ALL)
     install(TARGETS ${PROJECT_NAME}
@@ -145,9 +132,9 @@ endif()
 # Example binaries
 #============================================================================
 
-#if(WITH_EXAMPLES)
+if(WITH_EXAMPLES)
     set(EXAMPLES_DIR examples/)
 
     add_executable(example ${EXAMPLES_DIR}/example.cpp)
     target_link_libraries(example ${PROJECT_NAME})
-#endif
+endif()
