@@ -11,6 +11,19 @@ set(INSTALL_INC_DIR "${CMAKE_INSTALL_PREFIX}/include" CACHE PATH "Installation d
 set(INSTALL_MAN_DIR "${CMAKE_INSTALL_PREFIX}/share/man" CACHE PATH "Installation directory for manual pages")
 set(INSTALL_PKGCONFIG_DIR "${CMAKE_INSTALL_PREFIX}/share/pkgconfig" CACHE PATH "Installation directory for pkgconfig (.pc) files")
 
+macro (link_library TARGET_NAME LIB_NAME)
+    if(UNIX)
+        set(prefix "lib")
+        set(suffix ".a")
+    else()
+        set(prefix "")
+        set(suffix ".lib")
+    endif()
+
+    target_link_libraries(${TARGET_NAME} ${CMAKE_INSTALL_PREFIX}/${LIB_NAME}/lib/${prefix}${LIB_NAME}${suffix})
+
+endmacro()
+
 #============================================================================
 # zlib
 #============================================================================
@@ -63,10 +76,13 @@ endif()
 
 add_library(minizip ${MINIZIP_SRCS} ${MINIZIP_HDRS})
 add_dependencies(minizip zlib)
-target_link_libraries(minizip ${ZLIB_NAME})
+link_library(minizip ${ZLIB_NAME})
+
 target_include_directories(minizip PUBLIC ${CMAKE_INSTALL_PREFIX}/${ZLIB_NAME}/include)
-
-
+set_target_properties(minizip PROPERTIES ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_INSTALL_PREFIX}/minizip/lib)
+set_target_properties(minizip PROPERTIES ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_INSTALL_PREFIX}/minizip/lib)
+set_target_properties(minizip PROPERTIES ARCHIVE_OUTPUT_DIRECTORY_MINSIZEREL ${CMAKE_INSTALL_PREFIX}/minizip/lib)
+set_target_properties(minizip PROPERTIES ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_INSTALL_PREFIX}/minizip/lib)
 
 #============================================================================
 # vfspp
@@ -113,11 +129,16 @@ endif()
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++11 -stdlib=libc++ -fno-rtti -fno-exceptions -g -Wall")
 
 add_library(${PROJECT_NAME} STATIC ${LIBVFSPP_SRCS} ${LIBVFSPP_HDRS})
+set_target_properties(${PROJECT_NAME} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}/lib)
+set_target_properties(${PROJECT_NAME} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}/lib)
+set_target_properties(${PROJECT_NAME} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY_MINSIZEREL ${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}/lib)
+set_target_properties(${PROJECT_NAME} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}/lib)
 
 target_include_directories(${PROJECT_NAME} PUBLIC ${LIBVFSPP_PUBLIC_HDRS_DIR})
 target_include_directories(${PROJECT_NAME} PUBLIC ${MINIZIP_DIR})
 add_dependencies(${PROJECT_NAME} minizip)
-target_link_libraries(${PROJECT_NAME} minizip)
+link_library(${PROJECT_NAME} ${ZLIB_NAME})
+link_library(${PROJECT_NAME} minizip)
 
 if(NOT SKIP_INSTALL_LIBRARIES AND NOT SKIP_INSTALL_ALL)
     install(TARGETS ${PROJECT_NAME}
@@ -137,5 +158,9 @@ if(WITH_EXAMPLES)
     set(EXAMPLES_DIR examples)
 
     add_executable(example ${EXAMPLES_DIR}/example.cpp)
-    target_link_libraries(example ${PROJECT_NAME})
+    add_dependencies(example ${PROJECT_NAME})
+    link_library(example ${PROJECT_NAME})
+    link_library(example ${ZLIB_NAME})
+    link_library(example minizip)
+    target_include_directories(example PUBLIC ${LIBVFSPP_PUBLIC_HDRS_DIR})
 endif()
