@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 2.8)
-set(CMAKE_ALLOW_LOOSE_LOOP_CONSTRUCTS ON)
-
 include(ExternalProject)
+set_property (GLOBAL PROPERTY USE_FOLDERS ON)
 
 project(vfspp)
 set(VERSION "1.0.0")
@@ -21,14 +20,20 @@ if(UNIX)
 else()
     set(ZLIB_NAME zlibstatic)
 endif()
-set(ZLIB_DIR ${CMAKE_SOURCE_DIR}/external/zlib/)
+set(ZLIB_DIR ${CMAKE_SOURCE_DIR}/external/zlib)
+
+set(ZLIB_C_FLAGS " -Wno-error-implicit-function-declaration")
 
 ExternalProject_Add(zlib
     SOURCE_DIR ${ZLIB_DIR}
-    PREFIX ${CMAKE_INSTALL_PREFIX}/zlib
+    PREFIX ${CMAKE_INSTALL_PREFIX}
     INSTALL_DIR ${CMAKE_INSTALL_PREFIX}
-    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}
-)
+    PATCH_COMMAND COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/external/patches/zlib/CMakeLists.txt ${CMAKE_SOURCE_DIR}/external/zlib/CMakeLists.txt
+    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}/${ZLIB_NAME}
+               -DCMAKE_C_COMPILER_WORKS=${CMAKE_C_COMPILER_WORKS} 
+               -DCMAKE_C_FLAGS=${ZLIB_C_FLAGS} 
+               -DCMAKE_XCODE_EFFECTIVE_PLATFORMS=${CMAKE_XCODE_EFFECTIVE_PLATFORMS} 
+               -DCMAKE_OSX_SYSROOT=${CMAKE_OSX_SYSROOT})
 
 #============================================================================
 # minizip
@@ -59,14 +64,17 @@ endif()
 add_library(minizip ${MINIZIP_SRCS} ${MINIZIP_HDRS})
 add_dependencies(minizip zlib)
 target_link_libraries(minizip ${ZLIB_NAME})
+target_include_directories(minizip PUBLIC ${CMAKE_INSTALL_PREFIX}/${ZLIB_NAME}/include)
+
+
 
 #============================================================================
 # vfspp
 #============================================================================
 
-set(LIBVFSPP_PUBLIC_HDRS_DIR include/)
-set(LIBVFSPP_PRIVATE_HDRS_DIR src/)
-set(LIBVFSPP_SRCS_DIR src/)
+set(LIBVFSPP_PUBLIC_HDRS_DIR include)
+set(LIBVFSPP_PRIVATE_HDRS_DIR src)
+set(LIBVFSPP_SRCS_DIR src)
 
 set(LIBVFSPP_PUBLIC_HDRS
     ${LIBVFSPP_PUBLIC_HDRS_DIR}/CFileInfo.h
@@ -98,24 +106,17 @@ set(LIBVFSPP_SRCS
     ${LIBVFSPP_SRCS_DIR}/CZipFileSystem.cpp
 )
 
-include_directories(${INSTALL_INC_DIR})
-include_directories(${MINIZIP_DIR})
-include_directories(${LIBVFSPP_PUBLIC_HDRS_DIR})
-
-if(MSVC)
-    set(CMAKE_DEBUG_POSTFIX "d")
-    add_definitions(-D_CRT_SECURE_NO_DEPRECATE)
-    add_definitions(-D_CRT_NONSTDC_NO_DEPRECATE)
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-endif()
-
 if(APPLE)
     set(CMAKE_MACOSX_RPATH 1)
 endif()
 
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++11 -stdlib=libc++ -fno-rtti -g -Wall")
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++11 -stdlib=libc++ -fno-rtti -fno-exceptions -g -Wall")
 
 add_library(${PROJECT_NAME} STATIC ${LIBVFSPP_SRCS} ${LIBVFSPP_HDRS})
+
+target_include_directories(${PROJECT_NAME} PUBLIC ${LIBVFSPP_PUBLIC_HDRS_DIR})
+target_include_directories(${PROJECT_NAME} PUBLIC ${MINIZIP_DIR})
+add_dependencies(${PROJECT_NAME} minizip)
 target_link_libraries(${PROJECT_NAME} minizip)
 
 if(NOT SKIP_INSTALL_LIBRARIES AND NOT SKIP_INSTALL_ALL)
@@ -133,7 +134,7 @@ endif()
 #============================================================================
 
 if(WITH_EXAMPLES)
-    set(EXAMPLES_DIR examples/)
+    set(EXAMPLES_DIR examples)
 
     add_executable(example ${EXAMPLES_DIR}/example.cpp)
     target_link_libraries(example ${PROJECT_NAME})
