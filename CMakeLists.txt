@@ -11,15 +11,15 @@ set(INSTALL_INC_DIR "${CMAKE_INSTALL_PREFIX}/include" CACHE PATH "Installation d
 set(INSTALL_MAN_DIR "${CMAKE_INSTALL_PREFIX}/share/man" CACHE PATH "Installation directory for manual pages")
 set(INSTALL_PKGCONFIG_DIR "${CMAKE_INSTALL_PREFIX}/share/pkgconfig" CACHE PATH "Installation directory for pkgconfig (.pc) files")
 
-macro (link_library TARGET_NAME LIB_NAME)
-    if(UNIX)
-        set(prefix "lib")
-        set(suffix ".a")
-    else()
-        set(prefix "")
-        set(suffix ".lib")
-    endif()
+if(UNIX)
+    set(prefix "lib")
+    set(suffix ".a")
+else()
+    set(prefix "")
+    set(suffix ".lib")
+endif()
 
+macro (link_library TARGET_NAME LIB_NAME)
     target_link_libraries(${TARGET_NAME} ${CMAKE_INSTALL_PREFIX}/${LIB_NAME}/lib/${prefix}${LIB_NAME}${suffix})
 
 endmacro()
@@ -128,23 +128,28 @@ endif()
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++11 -stdlib=libc++ -fno-rtti -fno-exceptions -g -Wall")
 
-add_library(${PROJECT_NAME} STATIC ${LIBVFSPP_SRCS} ${LIBVFSPP_HDRS})
-set_target_properties(${PROJECT_NAME} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}/lib)
-set_target_properties(${PROJECT_NAME} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}/lib)
-set_target_properties(${PROJECT_NAME} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY_MINSIZEREL ${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}/lib)
-set_target_properties(${PROJECT_NAME} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}/lib)
+add_library(${PROJECT_NAME}thin STATIC ${LIBVFSPP_SRCS} ${LIBVFSPP_HDRS})
+set_target_properties(${PROJECT_NAME}thin PROPERTIES ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}/lib)
+set_target_properties(${PROJECT_NAME}thin PROPERTIES ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}/lib)
+set_target_properties(${PROJECT_NAME}thin PROPERTIES ARCHIVE_OUTPUT_DIRECTORY_MINSIZEREL ${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}/lib)
+set_target_properties(${PROJECT_NAME}thin PROPERTIES ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}/lib)
 
-target_include_directories(${PROJECT_NAME} PUBLIC ${LIBVFSPP_PUBLIC_HDRS_DIR})
-target_include_directories(${PROJECT_NAME} PUBLIC ${MINIZIP_DIR})
-add_dependencies(${PROJECT_NAME} minizip)
-link_library(${PROJECT_NAME} ${ZLIB_NAME})
-link_library(${PROJECT_NAME} minizip)
+target_include_directories(${PROJECT_NAME}thin PUBLIC ${LIBVFSPP_PUBLIC_HDRS_DIR})
+target_include_directories(${PROJECT_NAME}thin PUBLIC ${MINIZIP_DIR})
+add_dependencies(${PROJECT_NAME}thin minizip)
+link_library(${PROJECT_NAME}thin minizip)
+
+# create big static lib
+add_custom_command(TARGET ${PROJECT_NAME}thin POST_BUILD
+                   COMMAND rm -f ${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}/lib/${prefix}${PROJECT_NAME}${suffix}
+                   COMMAND libtool -static -o ${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}/lib/${prefix}${PROJECT_NAME}${suffix} 
+                                              ${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}/lib/${prefix}${PROJECT_NAME}thin${suffix}
+                                              ${CMAKE_INSTALL_PREFIX}/minizip/lib/${prefix}minizip${suffix}
+                                              ${CMAKE_INSTALL_PREFIX}/${ZLIB_NAME}/lib/${prefix}${ZLIB_NAME}${suffix})
 
 if(NOT SKIP_INSTALL_LIBRARIES AND NOT SKIP_INSTALL_ALL)
-    install(TARGETS ${PROJECT_NAME}
-        RUNTIME DESTINATION "${INSTALL_BIN_DIR}"
-        ARCHIVE DESTINATION "${INSTALL_LIB_DIR}"
-        LIBRARY DESTINATION "${INSTALL_LIB_DIR}")
+    install(FILES ${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}/lib/${prefix}${PROJECT_NAME}${suffix}
+            DESTINATION "${INSTALL_LIB_DIR}")
 endif()
 if(NOT SKIP_INSTALL_HEADERS AND NOT SKIP_INSTALL_ALL)
     install(FILES ${LIBVFSPP_PUBLIC_HDRS} DESTINATION "${INSTALL_INC_DIR}")
@@ -158,9 +163,7 @@ if(WITH_EXAMPLES)
     set(EXAMPLES_DIR examples)
 
     add_executable(example ${EXAMPLES_DIR}/example.cpp)
-    add_dependencies(example ${PROJECT_NAME})
+    add_dependencies(example ${PROJECT_NAME}thin)
     link_library(example ${PROJECT_NAME})
-    link_library(example ${ZLIB_NAME})
-    link_library(example minizip)
     target_include_directories(example PUBLIC ${LIBVFSPP_PUBLIC_HDRS_DIR})
 endif()
