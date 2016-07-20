@@ -59,15 +59,16 @@ if (textureFile && textureFile->IsOpened())
 
 # How To Build #
 
+Specify platform by setting  PLATFORM variable. Supported: Windows, Linux, Android, macOS, iOS, tvOS, watchOS
 ```
-cmake .
+cmake . -DPLATFORM=macOS
 make
 ```
 
 Use CMAKE_INSTALL_PREFIX to change installation directory
 
 ```
-cmake -DCMAKE_INSTALL_PREFIX=/usr
+cmake -DCMAKE_INSTALL_PREFIX=/usr -DPLATFORM=macOS
 make
 make install
 ```
@@ -75,9 +76,9 @@ make install
 To generate project file use -G option
 
 ```
-cmake -G Xcode .
+cmake -G Xcode . -DPLATFORM=iOS
 or
-cmake -G "Visual Studio 14 2015 Win64" .
+cmake -G "Visual Studio 14 2015 Win64" . -DPLATFORM=Windows
 ```
 
 Add parameter WITH_EXAMPLES to build with example project
