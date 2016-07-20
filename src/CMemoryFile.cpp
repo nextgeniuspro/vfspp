@@ -7,6 +7,7 @@
 //
 
 #include "CMemoryFile.h"
+#include <cstring>
 
 using namespace vfspp;
 
@@ -65,16 +66,16 @@ void CMemoryFile::Open(int mode)
     m_SeekPos = 0;
     m_IsReadOnly = true;
     
-    if (mode & IFile::Out)
+    if (mode & (int)IFile::Out)
     {
         m_IsReadOnly = false;
     }
-    if (mode & IFile::Append)
+    if (mode & (int)IFile::Append)
     {
         m_IsReadOnly = false;
         m_SeekPos = Size() > 0 ? Size() - 1 : 0;
     }
-    if (mode & IFile::Truncate)
+    if (mode & (int)IFile::Truncate)
     {
         m_Data.clear();
     }

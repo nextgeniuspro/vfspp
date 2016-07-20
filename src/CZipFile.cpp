@@ -10,6 +10,7 @@
 #include "zip.h"
 #include "unzip.h"
 #include <unistd.h>
+#include <cstring>
 #include "CStringUtils.h"
 
 using namespace vfspp;

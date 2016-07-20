@@ -66,7 +66,7 @@ void CNativeFile::Open(int mode)
     m_Mode = mode;
     m_IsReadOnly = true;
     
-    std::ios_base::open_mode open_mode = 0x00;
+    std::ios_base::openmode open_mode = (std::ios_base::openmode)0x00;
     if (mode & IFile::In)
     {
         open_mode |= std::fstream::in;
