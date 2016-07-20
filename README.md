@@ -59,7 +59,7 @@ if (textureFile && textureFile->IsOpened())
 
 # How To Build #
 
-Specify platform by setting  PLATFORM variable. Supported: Windows, Linux, Android, macOS, iOS, tvOS, watchOS
+Specify platform by setting PLATFORM variable. Supported: Windows, Linux, Android, macOS, iOS, tvOS, watchOS
 ```
 cmake . -DPLATFORM=macOS
 make
@@ -84,5 +84,5 @@ cmake -G "Visual Studio 14 2015 Win64" . -DPLATFORM=Windows
 Add parameter WITH_EXAMPLES to build with example project
 
 ```
-cmake -G Xcode . -DCMAKE_INSTALL_PREFIX=./build -DWITH_EXAMPLES=1
+cmake -G Xcode . -DCMAKE_INSTALL_PREFIX=./build -DPLATFORM=macOS -DWITH_EXAMPLES=1
 ```
