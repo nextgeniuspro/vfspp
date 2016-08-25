@@ -5,8 +5,8 @@
 //  Created by Yevgeniy Logachev
 //  Copyright (c) 2014 Yevgeniy Logachev. All rights reserved.
 //
-#ifndef GLOBAL_H
-#define GLOBAL_H
+#ifndef VFSPP_GLOBAL_H
+#define VFSPP_GLOBAL_H
 
 #include <functional>
 #include <vector>
@@ -27,4 +27,4 @@
 #define CLASS_PTR(_class) typedef std::shared_ptr<class _class> _class##Ptr;\
                           typedef std::weak_ptr<class _class> _class##Weak;
 
-#endif // GLOBAL_H
+#endif // VFSPP_GLOBAL_H
