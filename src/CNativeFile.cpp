@@ -138,7 +138,7 @@ uint64_t CNativeFile::Read(uint8_t* buffer, uint64_t size)
         return 0;
     }
     
-    m_Stream.read (reinterpret_cast<char*>(buffer), size);
+    m_Stream.read (reinterpret_cast<char*>(buffer), (std::streamsize)size);
     if (m_Stream)
     {
         return size;
@@ -154,7 +154,7 @@ uint64_t CNativeFile::Write(const uint8_t* buffer, uint64_t size)
         return 0;
     }
     
-    m_Stream.write (reinterpret_cast<const char*>(buffer), size);
+    m_Stream.write (reinterpret_cast<const char*>(buffer), (std::streamsize)size);
     if (m_Stream)
     {
         return size;

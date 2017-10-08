@@ -179,7 +179,7 @@ bool CNativeFileSystem::CopyFile(const CFileInfo& src, const CFileInfo& dest)
         if (fromFile && toFile)
         {
             uint64_t size = kChunkSize;
-            std::vector<uint8_t> buff(size);
+            std::vector<uint8_t> buff((size_t)size);
             do
             {
                 fromFile->Read(buff.data(), kChunkSize);

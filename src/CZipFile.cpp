@@ -69,7 +69,7 @@ bool CZip::MapFile(const std::string &filename, std::vector<uint8_t>& data)
     
     uint32_t index = std::get<0>(it->second);
     uint64_t size = std::get<1>(it->second);
-    data.resize(size);
+    data.resize((size_t)size);
     
     bool ok = mz_zip_reader_extract_to_mem_no_alloc((mz_zip_archive*)m_ZipArchive,
                                                     index,
@@ -237,7 +237,7 @@ uint64_t CZipFile::Read(uint8_t* buffer, uint64_t size)
     uint64_t maxSize = std::min(size, bufferSize);
     if (maxSize > 0)
     {
-        memcpy(buffer, m_Data.data(), maxSize);
+        memcpy(buffer, m_Data.data(), (size_t)maxSize);
     }
     else
     {
@@ -257,9 +257,9 @@ uint64_t CZipFile::Write(const uint8_t* buffer, uint64_t size)
     uint64_t bufferSize = Size() - Tell();
     if (size > bufferSize)
     {
-        m_Data.resize(m_Data.size() + (size - bufferSize));
+        m_Data.resize((size_t)(m_Data.size() + (size - bufferSize)));
     }
-    memcpy(m_Data.data() + Tell(), buffer, size);
+    memcpy(m_Data.data() + Tell(), buffer, (size_t)size);
     
     m_HasChanges = true;
     
