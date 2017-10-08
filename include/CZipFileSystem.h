@@ -26,8 +26,7 @@ public:
      * Optional parameter createIfNotExist will allow to create empty .zip file
      * Setup password to keep files in zip archive with ecryption
      */
-    CZipFileSystem(const std::string& zipPath, const std::string& basePath,
-                   bool createIfNotExist = false, const std::string& password = "");
+    CZipFileSystem(const std::string& zipPath, const std::string& basePath);
     ~CZipFileSystem();
     
     /*
@@ -113,9 +112,10 @@ private:
     CZipPtr m_Zip;
     std::string m_BasePath;
     bool m_IsInitialized;
-    bool m_IsNeedCreate;
-    std::string m_Password;
     TFileList m_FileList;
+    
+    std::mutex m_Mutex;
+    static std::unordered_map<std::string, CZipPtr> s_OpenedZips;
 };
     
 } // namespace vfspp

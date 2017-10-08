@@ -25,7 +25,7 @@ public:
     ~IFileSystem() = default;
     
     /*
-     * Initialize filesystem, call it first before using
+     * Initialize filesystem, call this method as soon as possible
      */
     virtual void Initialize() = 0;
     /*

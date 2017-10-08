@@ -119,7 +119,7 @@ inline bool operator ==(std::shared_ptr<IFile> f1, std::shared_ptr<IFile> f2)
 {
     if (!f1 || !f2)
     {
-        return f1.get() != f2.get();
+        return false;
     }
     
     return f1->FileInfo() == f2->FileInfo();

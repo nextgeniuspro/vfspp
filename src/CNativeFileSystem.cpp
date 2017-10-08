@@ -7,11 +7,11 @@
 //
 
 #include "CNativeFileSystem.h"
-#include <unistd.h>
 #include <dirent.h>
 #include <fstream>
 #include "CNativeFile.h"
-#include "CStringUtils.h"
+#include "CStringUtilsVFS.h"
+#include <sys/stat.h>
 
 using namespace vfspp;
 
@@ -91,7 +91,11 @@ bool CNativeFileSystem::IsReadOnly() const
         return true;
     }
     
-    return access(BasePath().c_str(), W_OK);
+    struct stat fileStat;
+    if (stat(BasePath().c_str(), &fileStat) < 0) {
+        return false;
+    }
+    return (fileStat.st_mode & S_IWUSR);
 }
 
 

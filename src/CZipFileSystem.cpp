@@ -10,7 +10,7 @@
 #include <dirent.h>
 #include <fstream>
 #include "CZipFile.h"
-#include "CStringUtils.h"
+#include "CStringUtilsVFS.h"
 
 using namespace vfspp;
 
@@ -18,17 +18,16 @@ using namespace vfspp;
 // Constants
 // *****************************************************************************
 
+std::unordered_map<std::string, CZipPtr> CZipFileSystem::s_OpenedZips;
+
 // *****************************************************************************
 // Public Methods
 // *****************************************************************************
 
-CZipFileSystem::CZipFileSystem(const std::string& zipPath, const std::string& basePath,
-                               bool createIfNotExist, const std::string& password)
+CZipFileSystem::CZipFileSystem(const std::string& zipPath, const std::string& basePath)
 : m_ZipPath(zipPath)
 , m_BasePath(basePath)
 , m_IsInitialized(false)
-, m_IsNeedCreate(createIfNotExist)
-, m_Password(password)
 {
 }
 
@@ -44,12 +43,22 @@ void CZipFileSystem::Initialize()
         return;
     }
     
-    m_Zip.reset(new CZip(m_ZipPath, m_IsNeedCreate, m_Password));
+    std::lock_guard<decltype(m_Mutex)> lock(m_Mutex);
+    m_Zip = s_OpenedZips[m_ZipPath];
+    if (!m_Zip) {
+        m_Zip.reset(new CZip(m_ZipPath));
+        s_OpenedZips[m_ZipPath] = m_Zip;
+    }
     m_IsInitialized = true;
 }
 
 void CZipFileSystem::Shutdown()
 {
+    std::lock_guard<decltype(m_Mutex)> lock(m_Mutex);
+    m_Zip = nullptr;
+    if (s_OpenedZips[m_ZipPath].use_count() == 1) {
+        s_OpenedZips.erase(m_ZipPath);
+    }
     m_FileList.clear();
     m_IsInitialized = false;
 }

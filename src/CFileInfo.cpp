@@ -7,7 +7,7 @@
 //
 
 #include "CFileInfo.h"
-#include "CStringUtils.h"
+#include "CStringUtilsVFS.h"
 
 using namespace vfspp;
 

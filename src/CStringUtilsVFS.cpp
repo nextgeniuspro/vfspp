@@ -6,7 +6,7 @@
 //  Copyright (c) 2014 yev. All rights reserved.
 //
 
-#include "CStringUtils.h"
+#include "CStringUtilsVFS.h"
 
 using namespace vfspp;
 

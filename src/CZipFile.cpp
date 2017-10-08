@@ -7,11 +7,10 @@
 //
 
 #include "CZipFile.h"
-#include "zip.h"
-#include "unzip.h"
-#include <unistd.h>
+#include "miniz.h"
+#include <sys/stat.h>
 #include <cstring>
-#include "CStringUtils.h"
+#include "CStringUtilsVFS.h"
 
 using namespace vfspp;
 
@@ -19,66 +18,41 @@ using namespace vfspp;
 // Constants
 // *****************************************************************************
 
+CZip::TEntriesMap CZip::s_Entries;
+
 // *****************************************************************************
 // Public Methods
 // *****************************************************************************
 
-CZip::CZip(const std::string& zipPath, bool needCreate, const std::string& password)
+CZip::CZip(const std::string& zipPath)
 : m_FileName(zipPath)
-, m_Password(password)
-, m_ZipArchive(nullptr)
-, m_UnzFile(nullptr)
 {
-    if (needCreate && access(m_FileName.c_str(), F_OK) == -1)
+    m_ZipArchive = static_cast<mz_zip_archive*>(malloc(sizeof(struct mz_zip_archive_tag)));
+    memset(m_ZipArchive, 0, sizeof(struct mz_zip_archive_tag));
+    
+    mz_bool status = mz_zip_reader_init_file((mz_zip_archive*)m_ZipArchive, zipPath.c_str(), 0);
+    if (!status)
     {
-        void* zipCreated = zipOpen64(FileName().c_str(), APPEND_STATUS_CREATE);
-        if (zipCreated)
+        VFS_LOG("Cannot open zip file: %s\n", zipPath.c_str());
+        assert("Cannot open zip file" && false);
+    }
+    
+    for (mz_uint i = 0; i < mz_zip_reader_get_num_files((mz_zip_archive*)m_ZipArchive); i++)
+    {
+        mz_zip_archive_file_stat file_stat;
+        if (!mz_zip_reader_file_stat((mz_zip_archive*)m_ZipArchive, i, &file_stat))
         {
-            zip_fileinfo zi = {{0}};
-            time_t rawtime;
-            time (&rawtime);
-            auto timeinfo = localtime(&rawtime);
-            zi.tmz_date.tm_sec = timeinfo->tm_sec;
-            zi.tmz_date.tm_min = timeinfo->tm_min;
-            zi.tmz_date.tm_hour = timeinfo->tm_hour;
-            zi.tmz_date.tm_mday = timeinfo->tm_mday;
-            zi.tmz_date.tm_mon = timeinfo->tm_mon;
-            zi.tmz_date.tm_year = timeinfo->tm_year;
-            
-            int err = -1;
-            if (Password().empty())
-            {
-                err = zipOpenNewFileInZip(zipCreated, NULL, &zi,
-                                          NULL, 0,
-                                          NULL, 0,
-                                          NULL,
-                                          Z_DEFLATED,
-                                          Z_DEFAULT_COMPRESSION);
-            }
-            else
-            {
-                err = zipOpenNewFileInZip3(zipCreated, NULL, &zi,
-                                           NULL, 0,
-                                           NULL, 0,
-                                           NULL, //comment
-                                           Z_DEFLATED,
-                                           Z_DEFAULT_COMPRESSION,
-                                           0 ,
-                                           15 ,
-                                           8 ,
-                                           Z_DEFAULT_STRATEGY,
-                                           Password().c_str(),
-                                           0);
-            }
-            
-            zipClose(zipCreated, 0);
+            VFS_LOG("Cannot read entry with index: %d from zip archive", i, zipPath.c_str());
+            continue;
         }
+        
+        s_Entries[file_stat.m_filename] = std::make_tuple(file_stat.m_file_index, file_stat.m_uncomp_size);
     }
 }
 
 CZip::~CZip()
 {
-    Unlock();
+    free(m_ZipArchive);
 }
 
 const std::string& CZip::FileName() const
@@ -86,65 +60,38 @@ const std::string& CZip::FileName() const
     return m_FileName;
 }
 
-const std::string& CZip::Password() const
+bool CZip::MapFile(const std::string &filename, std::vector<uint8_t>& data)
 {
-    return m_Password;
-}
-
-void* CZip::ZipOpen()
-{
-    UnzClose();
+    TEntriesMap::const_iterator it = s_Entries.find(filename);
+    if (it == s_Entries.end()) {
+        return false;
+    }
     
-    if (!m_ZipArchive)
-    {
-        m_ZipArchive = zipOpen64(FileName().c_str(), APPEND_STATUS_ADDINZIP);
-    }
-    return m_ZipArchive;
-};
-
-void* CZip::UnzOpen()
-{
-    ZipClose();
+    uint32_t index = std::get<0>(it->second);
+    uint64_t size = std::get<1>(it->second);
+    data.resize(size);
     
-    if (!m_UnzFile)
-    {
-        m_UnzFile = unzOpen64(FileName().c_str());
-    }
-    return m_UnzFile;
+    bool ok = mz_zip_reader_extract_to_mem_no_alloc((mz_zip_archive*)m_ZipArchive,
+                                                    index,
+                                                    data.data(),
+                                                    (size_t)size,
+                                                    0, 0, 0);
+    return ok;
 };
-
-void CZip::ZipClose()
-{
-    if (m_ZipArchive)
-    {
-        zipClose(m_ZipArchive, 0);
-        m_ZipArchive = nullptr;
-    }
-}
-
-void CZip::UnzClose()
-{
-    if (m_UnzFile)
-    {
-        unzClose(m_UnzFile);
-        m_UnzFile = nullptr;
-    }
-}
-
-void CZip::Lock()
-{
-    m_Mutex.lock();
-};
-void CZip::Unlock()
-{
-    m_Mutex.unlock();
-}
 
 bool CZip::IsReadOnly() const
 {
-    return access(FileName().c_str(), W_OK);
+    struct stat fileStat;
+    if (stat(FileName().c_str(), &fileStat) < 0) {
+        return false;
+    }
+    return (fileStat.st_mode & S_IWUSR);
 }
 
+
+// *****************************************************************************
+// Public Methods
+// *****************************************************************************
 
 CZipFile::CZipFile(const CFileInfo& fileInfo, CZipPtr zipFile)
 : m_ZipArchive(zipFile)
@@ -155,6 +102,7 @@ CZipFile::CZipFile(const CFileInfo& fileInfo, CZipPtr zipFile)
 , m_SeekPos(0)
 , m_Mode(0)
 {
+    assert(m_ZipArchive && "Cannot init zip file from empty zip archive");
 }
 
 CZipFile::~CZipFile()
@@ -179,19 +127,25 @@ uint64_t CZipFile::Size()
 
 bool CZipFile::IsReadOnly() const
 {
-    return (m_ZipArchive->IsReadOnly() && m_IsReadOnly);
+    assert(m_ZipArchive && "Zip archive is epty");
+    return (m_ZipArchive && m_ZipArchive->IsReadOnly() && m_IsReadOnly);
 }
 
 void CZipFile::Open(int mode)
 {
-    if (!FileInfo().IsValid() || (IsOpened() && m_Mode == mode))
-    {
+    // TODO: ZIPFS - Add implementation of readwrite mode
+    if ((mode & IFile::Out) ||
+        (mode & IFile::Append)) {
+        VFS_LOG("Files from zip can be opened in read only mode");
         return;
     }
     
-    m_ZipArchive->Lock();
-    unzFile unz = m_ZipArchive->UnzOpen();
-    assert(unz);
+    if (!FileInfo().IsValid() ||
+        (IsOpened() && m_Mode == mode) ||
+        !m_ZipArchive)
+    {
+        return;
+    }
     
     std::string absPath = FileInfo().AbsolutePath();
     if (CStringUtils::StartsWith(absPath, "/"))
@@ -199,35 +153,11 @@ void CZipFile::Open(int mode)
         absPath = absPath.substr(1, absPath.length() - 1);
     }
     
-    bool entryOpen = false;
-    int err = unzLocateFile(unz, absPath.c_str(), 0);
-    if (err == UNZ_OK)
-    {
-        if (m_ZipArchive->Password().empty())
-        {
-            err = unzOpenCurrentFile(unz);
-        }
-        else
-        {
-            err = unzOpenCurrentFilePassword(unz, m_ZipArchive->Password().c_str());
-        }
-        entryOpen = (err == UNZ_OK);
-        
-        unz_file_info64 oFileInfo;
-        int err = unzGetCurrentFileInfo64(unz, &oFileInfo, 0, 0, 0, 0, 0, 0);
-        if (err == UNZ_OK)
-        {
-            uint64_t size = oFileInfo.uncompressed_size;
-            m_Data.resize(size);
-            size = unzReadCurrentFile(unz, m_Data.data(), (unsigned int)size);
-        }
+    bool ok = m_ZipArchive->MapFile(absPath, m_Data);
+    if (!ok) {
+        VFS_LOG("Cannot open file: %s from zip: %s", absPath.c_str(), m_ZipArchive->Filename().c_str());
+        return;
     }
-    
-    if (entryOpen)
-    {
-        unzCloseCurrentFile(unz);
-    }
-    m_ZipArchive->Unlock();
     
     m_Mode = mode;
     m_IsReadOnly = true;
@@ -257,67 +187,7 @@ void CZipFile::Close()
         return;
     }
     
-    m_ZipArchive->Lock();
-    unzFile zip = m_ZipArchive->ZipOpen();
-    assert(zip);
-    
-    std::string absPath = FileInfo().AbsolutePath();
-    bool entryOpen = false;
-    if (CStringUtils::StartsWith(absPath, "/"))
-    {
-        absPath = absPath.substr(1, absPath.length() - 1);
-    }
-    
-    zip_fileinfo zi = {{0}};
-    time_t rawtime;
-    time (&rawtime);
-    auto timeinfo = localtime(&rawtime);
-    zi.tmz_date.tm_sec = timeinfo->tm_sec;
-    zi.tmz_date.tm_min = timeinfo->tm_min;
-    zi.tmz_date.tm_hour = timeinfo->tm_hour;
-    zi.tmz_date.tm_mday = timeinfo->tm_mday;
-    zi.tmz_date.tm_mon = timeinfo->tm_mon;
-    zi.tmz_date.tm_year = timeinfo->tm_year;
-    
-    int err = -1;
-    if (m_ZipArchive->Password().empty())
-    {
-        err = zipOpenNewFileInZip(zip, absPath.c_str(), &zi,
-                                  NULL, 0,
-                                  NULL, 0,
-                                  NULL,
-                                  Z_DEFLATED,
-                                  Z_DEFAULT_COMPRESSION);
-    }
-    else
-    {
-        uLong crcValue = crc32(0L, NULL, 0L);
-        crcValue = crc32(crcValue, (const Bytef*)m_Data.data(), (unsigned int)m_Data.size());
-        err = zipOpenNewFileInZip3(zip, absPath.c_str(), &zi,
-                                   NULL, 0,
-                                   NULL, 0,
-                                   NULL, //comment
-                                   Z_DEFLATED,
-                                   Z_DEFAULT_COMPRESSION,
-                                   0 ,
-                                   15 ,
-                                   8 ,
-                                   Z_DEFAULT_STRATEGY,
-                                   m_ZipArchive->Password().c_str(),
-                                   crcValue);
-    }
-    entryOpen = (err == ZIP_OK);
-    if (entryOpen)
-    {
-        if (Size() > 0)
-        {
-            err = zipWriteInFileInZip(zip, m_Data.data(), (unsigned int)m_Data.size());
-        }
-        
-        zipCloseFileInZip(zip);
-    }
-    m_ZipArchive->ZipClose();
-    m_ZipArchive->Unlock();
+    // TODO: ZIPFS - Add implementation of readwrite mode
     
     m_IsOpened = false;
 }

@@ -13,6 +13,7 @@
 
 namespace vfspp
 {
+CLASS_PTR(IFile)
 
 class CMemoryFile final : public IFile
 {

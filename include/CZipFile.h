@@ -18,28 +18,19 @@ CLASS_PTR(CZip);
 class CZip
 {
 public:
-    CZip(const std::string& zipPath, bool needCreate = false, const std::string& password = "");
+    CZip(const std::string& zipPath);
     ~CZip();
     
-    void* ZipOpen();
-    void* UnzOpen();
-    void ZipClose();
-    void UnzClose();
-    
+    bool MapFile(const std::string& filename, std::vector<uint8_t>& data);
     const std::string& FileName() const;
-    const std::string& Password() const;
-    
-    void Lock();
-    void Unlock();
     
     bool IsReadOnly() const;
     
 private:
     std::string m_FileName;
-    std::string m_Password;
     void* m_ZipArchive;
-    void* m_UnzFile;    
-    std::mutex m_Mutex;
+    typedef std::map<std::string, std::tuple<uint32_t, uint64_t>> TEntriesMap;
+    static TEntriesMap s_Entries;
 };
     
 

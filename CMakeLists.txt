@@ -113,13 +113,14 @@ set(LIBVFSPP_PUBLIC_HDRS
     ${LIBVFSPP_PUBLIC_HDRS_DIR}/CVirtualFileSystem.h
     ${LIBVFSPP_PUBLIC_HDRS_DIR}/CZipFile.h
     ${LIBVFSPP_PUBLIC_HDRS_DIR}/CZipFileSystem.h
-    ${LIBVFSPP_PUBLIC_HDRS_DIR}/Global.h
+    ${LIBVFSPP_PUBLIC_HDRS_DIR}/VFS.h
     ${LIBVFSPP_PUBLIC_HDRS_DIR}/IFile.h
     ${LIBVFSPP_PUBLIC_HDRS_DIR}/IFileSystem.h
 )
 
 set(LIBVFSPP_PRIVATE_HDRS
-    ${LIBVFSPP_PRIVATE_HDRS_DIR}/CStringUtils.h
+    ${LIBVFSPP_PRIVATE_HDRS_DIR}/CStringUtilsVFS.h
+    ${LIBVFSPP_PRIVATE_HDRS_DIR}/miniz.h
 )
 
 set(LIBVFSPP_SRCS
@@ -128,10 +129,11 @@ set(LIBVFSPP_SRCS
     ${LIBVFSPP_SRCS_DIR}/CMemoryFileSystem.cpp
     ${LIBVFSPP_SRCS_DIR}/CNativeFile.cpp
     ${LIBVFSPP_SRCS_DIR}/CNativeFileSystem.cpp
-    ${LIBVFSPP_SRCS_DIR}/CStringUtils.cpp
+    ${LIBVFSPP_SRCS_DIR}/CStringUtilsVFS.cpp
     ${LIBVFSPP_SRCS_DIR}/CVirtualFileSystem.cpp
     ${LIBVFSPP_SRCS_DIR}/CZipFile.cpp
     ${LIBVFSPP_SRCS_DIR}/CZipFileSystem.cpp
+    ${LIBVFSPP_SRCS_DIR}/miniz.c
 )
 
 if (${PLATFORM} STREQUAL "macOS" OR

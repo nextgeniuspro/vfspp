@@ -9,7 +9,7 @@
 #ifndef CFILEINFO_H
 #define CFILEINFO_H
 
-#include "Global.h"
+#include "VFS.h"
 
 namespace vfspp
 {
