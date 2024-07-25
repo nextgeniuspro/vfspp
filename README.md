@@ -39,26 +39,32 @@ vfs->AddFileSystem("/resources", std::move(zip_fs));
 vfs->AddFileSystem("/tmp", std::move(mem_fs));
 
 // Example: Open a save file
-if (auto saveFile = vfs->OpenFile(CFileInfo("/savefile.sav"), IFile::In))
+if (auto saveFile = vfs->OpenFile(CFileInfo("/savefile.sav"), IFile::FileMode::Read))
 {
-	// Parse game save
-	// ...
+	if (saveFile->IsOpened()) {
+		// Parse game save
+		// ...
+	}
 }
 
 // Example: Work with a temporary file in memory
-if (auto userAvatarFile = vfs->OpenFile(CFileInfo("/tmp/avatar.jpg"), IFile::ReadWrite))
+if (auto userAvatarFile = vfs->OpenFile(CFileInfo("/tmp/avatar.jpg"), IFile::FileMode::ReadWrite))
 {
-	// Load avatar from network and store it in memory
-	// ...
-	userAvatarFile->Write(data.data(), data.size());
-	userAvatarFile->Close();
+	if (userAvatarFile->IsOpened()) {
+		// Load avatar from network and store it in memory
+		// ...
+		userAvatarFile->Write(data.data(), data.size());
+		userAvatarFile->Close();
+	}
 }
 
 // Example: Load a resource from the zip file
-if (auto textureFile = vfs->OpenFile(CFileInfo("/resources/background.pvr"), IFile::In))
+if (auto textureFile = vfs->OpenFile(CFileInfo("/resources/background.pvr"), IFile::FileMode::Read))
 {
-	// Create texture
-	// ...
+	if (textureFile->IsOpened()) {
+		// Create texture
+		// ...
+	}
 }
 ```
 
