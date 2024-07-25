@@ -84,13 +84,10 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/vendor/vfspp vfspp_build)
 ```
 - For MSVC specify setting flag to use C++17
 ```cmake 
-if(MSVC)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17")
-endif(MSVC)
-```
-- Add vfspp as dependency to your target
+- Add vfspp as dependency to your target and set C++17 standard
 ```cmake 
-target_link_libraries(vfsppexample PRIVATE vfspp)
+target_link_libraries(<your_project> PRIVATE vfspp)
+target_compile_features(<your_project> PRIVATE cxx_std_17)
 ```
 
 See examples/CMakeLists.txt for example of usage

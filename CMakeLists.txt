@@ -21,5 +21,4 @@ target_include_directories(vfspp
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/vendor/miniz-cpp>
 )
 
-# Link the dependency
-# target_link_libraries(vfspp INTERFACE miniz-cpp)
+target_compile_features(vfspp INTERFACE cxx_std_17)
