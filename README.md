@@ -1,88 +1,100 @@
 # vfspp
 
-vfspp - C++ Virtual File System that allow to manipulate with files from memory, zip archives or native filesystems like it is just native filesystem. It is useful for game developers to use resources in native filesystem during development and then pack their to the archive in distribution build. 
+vfspp is a C++ Virtual File System header-only library that allows manipulation of files from memory, zip archives, or native filesystems as if they were part of a single native filesystem. This is particularly useful for game developers who want to use resources in the native filesystem during development and then pack them into an archive for distribution builds. Note: This library requires C++17 or later.
 
-```C++
-// Register native filesystem during developnment or zip for distribution build
+## Usage Example
+
+++
+// Register native filesystem during development or zip for distribution build
 IFileSystemPtr root_fs = nullptr;
-#if !defined(DISTRIBUTION_BUILD)
-root_fs.reset(new CNativeFileSystem(GetBundlePath() + "resources/"));
+#if defined(DISTRIBUTION_BUILD)
+	root_fs = std::make_unique<CZipFileSystem>("Resources.zip", "/");
 #else
-root_fs.reset(new CZipFileSystem("Resources.zip", "/"));
+	root_fs = std::make_unique<CNativeFileSystem>(GetBundlePath() + "Resources/");
 #endif
 
 root_fs->Initialize();
-vfs_get_global()->AddFileSystem("/", root_fs);
-```
+vfs_get_global()->AddFileSystem("/", std::move(root_fs));
 
-Sometimes useful to have several mounted filesystem, like "/" - is your root native filesystem, "/tmp" - memory filesystem, which allow to work with temporary files without disk operations, "/resources" - zip filesystem with game resources.
 
-```C++
-std::string zipPassword = "123";
+It's often useful to have several mounted filesystems. For example:
+- "/" as your root native filesystem
+- "/tmp" as a memory filesystem for working with temporary files without disk operations
+- "/resources" as a zip filesystem with game resources
 
-IFileSystemPtr root_fs(new CNativeFileSystem(GetBundlePath() + "Documents/"));
-IFileSystemPtr zip_fs(new CZipFileSystem("Resources.zip", "/", false, zipPassword));
-IFileSystemPtr mem_fs(new CMemoryFileSystem());
+Here's an example of how to set up multiple filesystems:
+
+++
+auto root_fs = std::make_unique<CNativeFileSystem>(GetBundlePath() + "Documents/");
+auto zip_fs = std::make_unique<CZipFileSystem>("Resources.zip");
+auto mem_fs = std::make_unique<CMemoryFileSystem>();
 
 root_fs->Initialize();
 zip_fs->Initialize();
 mem_fs->Initialize();
 
-CVirtualFileSystemPtr vfs = vfs_get_global();
-vfs->AddFileSystem("/", root_fs);
-vfs->AddFileSystem("/resources", zip_fs);
-vfs->AddFileSystem("/tmp", mem_fs);
+auto vfs = vfs_get_global();
+vfs->AddFileSystem("/", std::move(root_fs));
+vfs->AddFileSystem("/resources", std::move(zip_fs));
+vfs->AddFileSystem("/tmp", std::move(mem_fs));
 
-IFilePtr saveFile = vfs->OpenFile(CFileInfo("/savefile.sav"), IFile::In);
-if (saveFile && saveFile->IsOpened())
+// Example: Open a save file
+if (auto saveFile = vfs->OpenFile(CFileInfo("/savefile.sav"), IFile::In))
 {
-    // Parse game save
-    ...
+	// Parse game save
+	// ...
 }
 
-IFilePtr userAvatarFile = vfs->OpenFile(CFileInfo("/tmp/avatar.jpg"), IFile::ReadWrite);
-if (userAvatarFile && userAvatarFile->IsOpened())
+// Example: Work with a temporary file in memory
+if (auto userAvatarFile = vfs->OpenFile(CFileInfo("/tmp/avatar.jpg"), IFile::ReadWrite))
 {
 	// Load avatar from network and store it in memory
-	...
-	userAvatarFile->Write(&data[0], data.size());
+	// ...
+	userAvatarFile->Write(data.data(), data.size());
 	userAvatarFile->Close();
 }
 
-IFilePtr textureFile = vfs->OpenFile(CFileInfo("/resources/background.pvr"), IFile::In);
-if (textureFile && textureFile->IsOpened())
+// Example: Load a resource from the zip file
+if (auto textureFile = vfs->OpenFile(CFileInfo("/resources/background.pvr"), IFile::In))
 {
 	// Create texture
-	...
+	// ...
 }
+
+# How To Integrate with cmake
+
+- Add vfspp as submodule to your project
+```
+git submodule add https://github.com/nextgeniuspro/vfspp.git vendor/vfspp
+```
+- Update submodules to download dependencies
+```
+git submodule update --init --recursive
+```
+- Add vfspp as subdirectory to your CMakeLists.txt
+```
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/vendor/vfspp vfspp_build)
+```
+- For MSVC specify setting flag to use C++17
+```
+if(MSVC)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17")
+endif(MSVC)
+```
+- Add vfspp as dependency to your target
+```
+target_link_libraries(vfsppexample PRIVATE vfspp)
 ```
 
-# How To Build #
+See examples/CMakeLists.txt for example of usage
 
-Specify platform by setting PLATFORM variable. Supported: Windows, Linux, Android, macOS, iOS, tvOS, watchOS
-```
-cmake . -DPLATFORM=macOS
-make
-```
+# How To Build Example #
 
-Use CMAKE_INSTALL_PREFIX to change installation directory
-
+- Navigate to 'examples' directory
 ```
-cmake -DCMAKE_INSTALL_PREFIX=/usr -DPLATFORM=macOS
-make
-make install
+cd examples
 ```
-
-To generate project file use -G option
-
+- Run cmake to generate project
 ```
-cmake -G Xcode . -DPLATFORM=iOS
-or
-cmake -G "Visual Studio 14 2015 Win64" . -DPLATFORM=Windows
-```
-
-Add parameter WITH_EXAMPLES to build with example project
-
-```
-cmake -G Xcode . -DCMAKE_INSTALL_PREFIX=./build -DPLATFORM=macOS -DWITH_EXAMPLES=1
+cmake -B ./build -G "Visual Studio 17 2022" .
 ```
