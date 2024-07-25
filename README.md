@@ -9,9 +9,9 @@ vfspp is a C++ Virtual File System header-only library that allows manipulation 
 
 IFileSystemPtr root_fs = nullptr;
 #if defined(DISTRIBUTION_BUILD)
-	root_fs = std::make_unique<CZipFileSystem>("Resources.zip", "/");
+	root_fs = std::make_unique<CZipFileSystem>("Resources.zip");
 #else
-	root_fs = std::make_unique<CNativeFileSystem>(GetBundlePath() + "Resources/");
+	root_fs = std::make_unique<CNativeFileSystem>(GetBundlePath() + "Resources");
 #endif
 
 root_fs->Initialize();
