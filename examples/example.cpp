@@ -1,31 +1,45 @@
-#include "CVirtualFileSystem.h"
-#include "CNativeFileSystem.h"
-#include "CMemoryFileSystem.h"
-#include "CZipFileSystem.h"
+#include "vfspp/VFS.h"
 
 using namespace vfspp;
 
 int main()
 {
-	vfs_initialize();
+	VirtualFileSystemPtr vfs(new VirtualFileSystem());
+    IFileSystemPtr rootFS(new NativeFileSystem("./files"));
+    IFileSystemPtr memFS(new MemoryFileSystem());
+    IFileSystemPtr zipFS(new ZipFileSystem("./test.zip"));
 
-	std::string zipPassword = "123";
-    
-    IFileSystemPtr root_fs(new CNativeFileSystem("./"));
-    IFileSystemPtr zip_fs(new CZipFileSystem("password_123.zip", "/", true, zipPassword));
-    IFileSystemPtr mem_fs(new CMemoryFileSystem());
-    
-    root_fs->Initialize();
-    zip_fs->Initialize();
-    mem_fs->Initialize();
-    
-    CVirtualFileSystemPtr vfs = vfs_get_global();
-    vfs->AddFileSystem("/", root_fs);
-    vfs->AddFileSystem("/zip", zip_fs);
-    vfs->AddFileSystem("/memory/", mem_fs);
+    rootFS->Initialize();
+    memFS->Initialize();
+    zipFS->Initialize();
 
-	// Create memory file
-    IFilePtr memFile = vfs->OpenFile(CFileInfo("/memory/file.txt"), IFile::ReadWrite);
+    vfs->AddFileSystem("/", rootFS);
+    vfs->AddFileSystem("/memory", memFS);
+    vfs->AddFileSystem("/zip", zipFS);
+
+    printf("Native filesystem test:\n");
+
+    IFilePtr file = vfs->OpenFile(FileInfo("/test.txt"), IFile::FileMode::ReadWrite);
+    if (file && file->IsOpened())
+    {
+        char data[] = "The quick brown fox jumps over the lazy dog\n";
+        file->Write(reinterpret_cast<uint8_t*>(data), sizeof(data));
+        file->Close();
+    }
+
+    IFilePtr file2 = vfs->OpenFile(FileInfo("/test.txt"), IFile::FileMode::Read);
+    if (file2 && file2->IsOpened())
+    {
+        char data[256];
+        memset(data, 0, sizeof(data));
+        file2->Read(reinterpret_cast<uint8_t*>(data), 256);
+        
+        printf("%s\n", data);
+    }
+
+    printf("Memory filesystem test:\n");
+
+    IFilePtr memFile = vfs->OpenFile(FileInfo("/memory/file.txt"), IFile::FileMode::ReadWrite);
     if (memFile && memFile->IsOpened())
     {
         char data[] = "The quick brown fox jumps over the lazy dog\n";
@@ -33,34 +47,33 @@ int main()
 	    memFile->Close();
     }
     
-    IFilePtr memFile2 = vfs->OpenFile(CFileInfo("/memory/file.txt"), IFile::In);
+    IFilePtr memFile2 = vfs->OpenFile(FileInfo("/memory/file.txt"), IFile::FileMode::Read);
     if (memFile2 && memFile2->IsOpened())
     {
         char data[256];
+        memset(data, 0, sizeof(data));
         memFile->Read(reinterpret_cast<uint8_t*>(data), 256);
         
         printf("%s\n", data);
     }
-    
-    // Create zip file
-    IFilePtr zipFile = vfs->OpenFile(CFileInfo("/zip/newFile.txt"), IFile::ReadWrite);
+
+    printf("Zip filesystem test:\n");
+
+    IFileSystem::TFileList files = zipFS->FileList();
+    for (auto& file : files)
+	{
+		printf("Zip file entry: %s\n", file->GetFileInfo().AbsolutePath().c_str());
+	}
+
+    IFilePtr zipFile = vfs->OpenFile(FileInfo("/zip/file.txt"), IFile::FileMode::Read);
     if (zipFile && zipFile->IsOpened())
     {
-    	char data[] = "The quick brown fox jumps over the lazy dog\n";
-    	zipFile->Write(reinterpret_cast<uint8_t*>(data), sizeof(data));
-    	zipFile->Close();
-    }
+        char data[256];
+        memset(data, 0, sizeof(data));
+        zipFile->Read(reinterpret_cast<uint8_t*>(data), 256);
 
-    // Create native file
-    IFilePtr nativeFile = vfs->OpenFile(CFileInfo("/newFile.txt"), IFile::ReadWrite);
-    if (nativeFile && nativeFile->IsOpened())
-    {
-    	char data[] = "The quick brown fox jumps over the lazy dog\n";
-    	nativeFile->Write(reinterpret_cast<uint8_t*>(data), sizeof(data));
-    	nativeFile->Close();
+        printf("%s\n", data);
     }
-
-    vfs_shutdown();
 
 	return 0;
 }

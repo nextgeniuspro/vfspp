@@ -27,3 +27,6 @@
 *.exe
 *.out
 *.app
+/build
+/examples/build
+.vscode/settings.json
