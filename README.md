@@ -6,6 +6,7 @@ vfspp is a C++ Virtual File System header-only library that allows manipulation 
 
 ```C++
 // Register native filesystem during development or zip for distribution build
+
 IFileSystemPtr root_fs = nullptr;
 #if defined(DISTRIBUTION_BUILD)
 	root_fs = std::make_unique<CZipFileSystem>("Resources.zip", "/");
@@ -14,7 +15,9 @@ IFileSystemPtr root_fs = nullptr;
 #endif
 
 root_fs->Initialize();
-vfs_get_global()->AddFileSystem("/", std::move(root_fs));
+
+VirtualFileSystemPtr vfs(new VirtualFileSystem());
+vfs->AddFileSystem("/", std::move(root_fs));
 ```
 
 It's often useful to have several mounted filesystems. For example:
@@ -33,7 +36,7 @@ root_fs->Initialize();
 zip_fs->Initialize();
 mem_fs->Initialize();
 
-auto vfs = vfs_get_global();
+VirtualFileSystemPtr vfs(new VirtualFileSystem());
 vfs->AddFileSystem("/", std::move(root_fs));
 vfs->AddFileSystem("/resources", std::move(zip_fs));
 vfs->AddFileSystem("/tmp", std::move(mem_fs));
