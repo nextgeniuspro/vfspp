@@ -7,17 +7,17 @@ vfspp is a C++ Virtual File System header-only library that allows manipulation 
 ```C++
 // Register native filesystem during development or zip for distribution build
 
-IFileSystemPtr root_fs = nullptr;
+IFileSystemPtr rootFS = nullptr;
 #if defined(DISTRIBUTION_BUILD)
-	root_fs = std::make_unique<CZipFileSystem>("Resources.zip");
+	rootFS = std::make_unique<ZipFileSystem>("Resources.zip");
 #else
-	root_fs = std::make_unique<CNativeFileSystem>(GetBundlePath() + "Resources");
+	rootFS = std::make_unique<NativeFileSystem>(GetBundlePath() + "Resources");
 #endif
 
-root_fs->Initialize();
+rootFS->Initialize();
 
 VirtualFileSystemPtr vfs(new VirtualFileSystem());
-vfs->AddFileSystem("/", std::move(root_fs));
+vfs->AddFileSystem("/", std::move(rootFS));
 ```
 
 It's often useful to have several mounted filesystems. For example:
@@ -28,21 +28,21 @@ It's often useful to have several mounted filesystems. For example:
 Here's an example of how to set up multiple filesystems:
 
 ```C++
-auto root_fs = std::make_unique<CNativeFileSystem>(GetBundlePath() + "Documents/");
-auto zip_fs = std::make_unique<CZipFileSystem>("Resources.zip");
-auto mem_fs = std::make_unique<CMemoryFileSystem>();
+auto rootFS = std::make_unique<NativeFileSystem>(GetBundlePath() + "Documents/");
+auto zipFS = std::make_unique<ZipFileSystem>("Resources.zip");
+auto memFS = std::make_unique<MemoryFileSystem>();
 
-root_fs->Initialize();
-zip_fs->Initialize();
-mem_fs->Initialize();
+rootFS->Initialize();
+zipFS->Initialize();
+memFS->Initialize();
 
 VirtualFileSystemPtr vfs(new VirtualFileSystem());
-vfs->AddFileSystem("/", std::move(root_fs));
-vfs->AddFileSystem("/resources", std::move(zip_fs));
-vfs->AddFileSystem("/tmp", std::move(mem_fs));
+vfs->AddFileSystem("/", std::move(rootFS));
+vfs->AddFileSystem("/resources", std::move(zipFS));
+vfs->AddFileSystem("/tmp", std::move(memFS));
 
 // Example: Open a save file
-if (auto saveFile = vfs->OpenFile(CFileInfo("/savefile.sav"), IFile::FileMode::Read))
+if (auto saveFile = vfs->OpenFile(FileInfo("/savefile.sav"), IFile::FileMode::Read))
 {
 	if (saveFile->IsOpened()) {
 		// Parse game save
@@ -51,7 +51,7 @@ if (auto saveFile = vfs->OpenFile(CFileInfo("/savefile.sav"), IFile::FileMode::R
 }
 
 // Example: Work with a temporary file in memory
-if (auto userAvatarFile = vfs->OpenFile(CFileInfo("/tmp/avatar.jpg"), IFile::FileMode::ReadWrite))
+if (auto userAvatarFile = vfs->OpenFile(FileInfo("/tmp/avatar.jpg"), IFile::FileMode::ReadWrite))
 {
 	if (userAvatarFile->IsOpened()) {
 		// Load avatar from network and store it in memory
@@ -62,7 +62,7 @@ if (auto userAvatarFile = vfs->OpenFile(CFileInfo("/tmp/avatar.jpg"), IFile::Fil
 }
 
 // Example: Load a resource from the zip file
-if (auto textureFile = vfs->OpenFile(CFileInfo("/resources/background.pvr"), IFile::FileMode::Read))
+if (auto textureFile = vfs->OpenFile(FileInfo("/resources/background.pvr"), IFile::FileMode::Read))
 {
 	if (textureFile->IsOpened()) {
 		// Create texture
