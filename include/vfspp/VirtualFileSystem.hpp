@@ -1,5 +1,5 @@
-#ifndef VIRTUALFILESYSTEM_H
-#define VIRTUALFILESYSTEM_H
+#ifndef VIRTUALFILESYSTEM_HPP
+#define VIRTUALFILESYSTEM_HPP
 
 #include "IFileSystem.h"
 #include "IFile.h"
@@ -108,7 +108,7 @@ public:
                 FileInfo realPath(alias.filesystem->BasePath(), relativePath, false);
 
                 // We open file we real path..
-				IFilePtr file = alias.filesystem->OpenFile(realPath, static_cast<int>(mode));
+				IFilePtr file = alias.filesystem->OpenFile(realPath, mode);
 				if (file) {
                     // ..but store with aliased path to close file later
 					m_OpenedFiles[filePath.AbsolutePath()] = alias.filesystem;
@@ -153,4 +153,4 @@ private:
     
 }; // namespace vfspp
 
-#endif // VIRTUALFILESYSTEM_H
+#endif // VIRTUALFILESYSTEM_HPP

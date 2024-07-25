@@ -1,0 +1,3 @@
+[submodule "vendor/miniz-cpp"]
+	path = vendor/miniz-cpp
+	url = https://github.com/tfussell/miniz-cpp.git

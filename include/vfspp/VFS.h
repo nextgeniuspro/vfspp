@@ -1,27 +1,9 @@
 #ifndef VFSPP_H
 #define VFSPP_H
 
-#include <functional>
-#include <vector>
-#include <map>
-#include <unordered_map>
-#include <set>
-#include <list>
-#include <string>
-#include <sstream>
-#include <algorithm>
-#include <mutex>
-#include <memory>
-#include <utility>
-#include <math.h>
-#include <assert.h>
-#include <fstream>
-#include <iostream>
-#include <filesystem>
-
-namespace vfspp
-{
-
-}; // namespace vfspp
+#include "VirtualFileSystem.hpp"
+#include "NativeFileSystem.hpp"
+#include "MemoryFileSystem.hpp"
+#include "ZipFileSystem.hpp"
 
 #endif // VFSPP_H

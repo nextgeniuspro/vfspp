@@ -1,27 +1,30 @@
-#ifndef MEMORYFILE_HPP
-#define MEMORYFILE_HPP
+#ifndef ZIPFILE_HPP
+#define ZIPFILE_HPP
 
 #include "IFile.h"
+#include "zip_file.hpp"
 
 namespace vfspp
 {
 
-using MemoryFilePtr = std::shared_ptr<class MemoryFile>;
-using MemoryFileWeakPtr = std::weak_ptr<class MemoryFile>;
+using ZipFilePtr = std::shared_ptr<class ZipFile>;
+using ZipFileWeakPtr = std::weak_ptr<class ZipFile>;
 
-class MemoryFile final : public IFile
+
+class ZipFile final : public IFile
 {
-    friend class MemoryFileSystem;
 public:
-    MemoryFile(const FileInfo& fileInfo)
+    ZipFile(const FileInfo& fileInfo, uint32_t entryID, uint64_t size, std::weak_ptr<mz_zip_archive> zipArchive)
         : m_FileInfo(fileInfo)
-        , m_IsReadOnly(true)
+        , m_EntryID(entryID)
+        , m_Size(size)
+        , m_ZipArchive(zipArchive)
         , m_IsOpened(false)
-        , m_Mode(FileMode::Read)
+        , m_SeekPos(0)
     {
     }   
 
-    ~MemoryFile()
+    ~ZipFile()
     {
         Close();
     }
@@ -40,7 +43,7 @@ public:
     virtual uint64_t Size() override
     {
         if (IsOpened()) {
-            return m_Data.size();
+            return m_Size;
         }
         
         return 0;
@@ -51,7 +54,7 @@ public:
      */
     virtual bool IsReadOnly() const override
     {
-        return m_IsReadOnly;
+        return true;
     }
     
     /*
@@ -59,28 +62,28 @@ public:
      */
     virtual void Open(FileMode mode) override
     {
-        if (IsOpened() && m_Mode == mode) {
-            Seek(0, Origin::Begin);
+        bool requestWrite = ((mode & IFile::FileMode::Write) == IFile::FileMode::Write);
+        requestWrite |= ((mode & IFile::FileMode::Append) == IFile::FileMode::Append);
+        requestWrite |= ((mode & IFile::FileMode::Truncate) == IFile::FileMode::Truncate);
+
+        if (IsReadOnly() && requestWrite) {
+            return;
+        }
+
+        if (IsOpened()) {
+            Seek(0, IFile::Origin::Begin);
+            return;
+        }
+
+        std::shared_ptr<mz_zip_archive> zipArchive = m_ZipArchive.lock();
+        if (!zipArchive) {
             return;
         }
         
-        m_Mode = mode;
         m_SeekPos = 0;
-        m_IsReadOnly = true;
         
-        std::ios_base::openmode open_mode = static_cast<std::ios_base::openmode>(0x00);
-        if ((mode & FileMode::Write) == FileMode::Write) {
-            m_IsReadOnly = false;
-        }
-        if ((mode & FileMode::Append) == FileMode::Append) {
-            m_IsReadOnly = false;
-            m_SeekPos = Size() > 0 ? Size() - 1 : 0;
-        }
-        if ((mode & FileMode::Truncate) == FileMode::Truncate) {
-            m_Data.clear();
-        }
-        
-        m_IsOpened = true;
+        m_Data.resize(m_Size);
+        m_IsOpened = mz_zip_reader_extract_to_mem_no_alloc(zipArchive.get(), m_EntryID, m_Data.data(), static_cast<size_t>(m_Size), 0, 0, 0);
     }
     
     /*
@@ -88,10 +91,10 @@ public:
      */
     virtual void Close() override
     {
-        m_IsReadOnly = true;
         m_IsOpened = false;
         m_SeekPos = 0;
-        m_Mode = FileMode::Read;
+
+        m_Data.clear();
     }
     
     /*
@@ -111,11 +114,11 @@ public:
             return 0;
         }
         
-        if (origin == Origin::Begin) {
+        if (origin == IFile::Origin::Begin) {
             m_SeekPos = offset;
-        } else if (origin == Origin::End) {
+        } else if (origin == IFile::Origin::End) {
             m_SeekPos = Size() - offset;
-        } else if (origin == Origin::Set) {
+        } else if (origin == IFile::Origin::Set) {
             m_SeekPos += offset;
         }
         m_SeekPos = std::min(m_SeekPos, Size() - 1);
@@ -138,11 +141,6 @@ public:
         if (!IsOpened()) {
             return 0;
         }
-
-        // Skip reading if file is not opened for reading
-        if ((m_Mode & FileMode::Read) != FileMode::Read) {
-            return 0;
-        }
         
         uint64_t leftSize = Size() - Tell();
         uint64_t maxSize = std::min(size, leftSize);
@@ -158,33 +156,19 @@ public:
      */
     virtual uint64_t Write(const uint8_t* buffer, uint64_t size) override
     {
-        if (!IsOpened() || IsReadOnly()) {
-            return 0;
-        }
-        
-        // Skip writing if file is not opened for writing
-        if ((m_Mode & FileMode::Write) != FileMode::Write) {
-            return 0;
-        }
-        
-        uint64_t leftSize = Size() - Tell();
-        if (size > leftSize) {
-            m_Data.resize((size_t)(m_Data.size() + (size - leftSize)));
-        }
-        memcpy(m_Data.data() + Tell(), buffer, static_cast<size_t>(size));
-        
-        return size;
+        return 0;
     }
     
 private:
-    std::vector<uint8_t> m_Data;
     FileInfo m_FileInfo;
-    bool m_IsReadOnly;
+    uint32_t m_EntryID;
+    uint64_t m_Size;
+    std::weak_ptr<mz_zip_archive> m_ZipArchive;
+    std::vector<uint8_t> m_Data;
     bool m_IsOpened;
     uint64_t m_SeekPos;
-    FileMode m_Mode;
 };
     
 } // namespace vfspp
 
-#endif // MEMORYFILE_HPP
+#endif // ZIPFILE_HPP

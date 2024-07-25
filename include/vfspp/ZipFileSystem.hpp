@@ -1,29 +1,32 @@
-#ifndef NATIVEFILESYSTEM_HPP
-#define NATIVEFILESYSTEM_HPP
+#ifndef ZIPFILESYSTEM_HPP
+#define ZIPFILESYSTEM_HPP
 
 #include "IFileSystem.h"
 #include "Global.h"
 #include "StringUtils.hpp"
-#include "NativeFile.hpp"
+#include "ZipFile.hpp"
+#include "zip_file.hpp"
 
 namespace fs = std::filesystem;
 
 namespace vfspp
 {
 
-using NativeFileSystemPtr = std::shared_ptr<class NativeFileSystem>;
-using NativeFileSystemWeakPtr = std::weak_ptr<class NativeFileSystem>;
+using ZipFileSystemPtr = std::shared_ptr<class ZipFileSystem>;
+using ZipFileSystemWeakPtr = std::weak_ptr<class ZipFileSystem>;
 
-class NativeFileSystem final : public IFileSystem
+
+class ZipFileSystem final : public IFileSystem
 {
 public:
-    NativeFileSystem(const std::string& basePath)
-        : m_BasePath(basePath)
+    ZipFileSystem(const std::string& zipPath)
+        : m_ZipPath(zipPath)
+        , m_ZipArchive(nullptr)
         , m_IsInitialized(false)
     {
     }
 
-    ~NativeFileSystem()
+    ~ZipFileSystem()
     {
         Shutdown();
     }
@@ -37,11 +40,18 @@ public:
             return;
         }
 
-        if (!fs::exists(m_BasePath) || !fs::is_directory(m_BasePath)) {
+        if (!fs::is_regular_file(m_ZipPath)) {
             return;
         }
 
-        BuildFilelist(m_BasePath, m_FileList);
+        m_ZipArchive = std::make_shared<mz_zip_archive>();
+
+        mz_bool status = mz_zip_reader_init_file(m_ZipArchive.get(), m_ZipPath.c_str(), 0);
+        if (!status) {
+            return;
+        }
+
+        BuildFilelist(m_ZipArchive, m_FileList);
         m_IsInitialized = true;
     }
 
@@ -50,12 +60,19 @@ public:
      */
     virtual void Shutdown() override
     {
-        m_BasePath = "";
+        m_ZipPath = "";
         // close all files
         for (auto& file : m_FileList) {
             file->Close();
         }
         m_FileList.clear();
+
+        // close zip archive
+        if (m_ZipArchive) {
+            mz_zip_reader_end(m_ZipArchive.get());
+            m_ZipArchive = nullptr;
+        }
+
         m_IsInitialized = false;
     }
     
@@ -72,7 +89,8 @@ public:
      */
     virtual const std::string& BasePath() const override
     {
-        return m_BasePath;
+        static std::string rootPath = "/";
+        return rootPath;
     }
     
     /*
@@ -88,12 +106,7 @@ public:
      */
     virtual bool IsReadOnly() const override
     {
-        if (!IsInitialized()) {
-            return true;
-        }
-        
-        auto perms = fs::status(m_BasePath).permissions();
-        return (perms & fs::perms::owner_write) == fs::perms::none;
+        return true;
     }
     
     /*
@@ -112,15 +125,8 @@ public:
         }
 
         IFilePtr file = FindFile(filePath);
-        bool isExists = (file != nullptr);
-        if (!isExists && !IsReadOnly()) {
-            mode = mode | IFile::FileMode::Truncate;
-            file.reset(new NativeFile(filePath));
-        }
-        file->Open(mode);
-        
-        if (!isExists && file->IsOpened()) {
-            m_FileList.insert(file);
+        if (file) {
+            file->Open(mode);
         }
         
         return file;
@@ -131,12 +137,6 @@ public:
      */
     virtual bool CreateFile(const FileInfo& filePath) override
     {
-        IFilePtr file = OpenFile(filePath, IFile::FileMode::Write | IFile::FileMode::Truncate);
-        if (file) {
-            file->Close();
-            return true;
-        }
-        
         return false;
     }
     
@@ -145,17 +145,7 @@ public:
      */
     virtual bool RemoveFile(const FileInfo& filePath) override
     {
-        if (IsReadOnly()) {
-            return false;
-        }
-        
-        IFilePtr file = FindFile(filePath);
-        if (!file) {
-            return false;
-        }
-
-        m_FileList.erase(file);
-        return fs::remove(filePath.AbsolutePath());
+        return false;
     }
     
     /*
@@ -163,15 +153,7 @@ public:
      */
     virtual bool CopyFile(const FileInfo& src, const FileInfo& dest) override
     {
-        if (IsReadOnly()) {
-            return false;
-        }
-        
-        if (!IsFileExists(src)) {
-            return false;
-        }
-        
-        return fs::copy_file(src.AbsolutePath(), dest.AbsolutePath());
+        return false;
     }
     
     /*
@@ -179,39 +161,32 @@ public:
      */
     virtual bool RenameFile(const FileInfo& srcPath, const FileInfo& dstPath) override
     {
-        if (IsReadOnly()) {
-            return false;
-        }
-        
-        if (!IsFileExists(srcPath)) {
-            return false;
-        }
-        
-        fs::rename(srcPath.AbsolutePath(), dstPath.AbsolutePath());
-        return true;
+        return false;
     }
 
 private:
-    void BuildFilelist(std::string basePath, TFileList& outFileList)
+    void BuildFilelist(std::shared_ptr<mz_zip_archive> zipArchive, TFileList& outFileList)
     {
-        for (const auto& entry : fs::directory_iterator(basePath)) {
-            auto filename = entry.path().filename().string();
-            if (fs::is_directory(entry.status())) {
-                BuildFilelist(entry.path().string(), outFileList);
-            } else if (fs::is_regular_file(entry.status())) {
-                FileInfo fileInfo(basePath, filename, false);
-                IFilePtr file(new NativeFile(fileInfo));
-                outFileList.insert(file);
+        for (mz_uint i = 0; i < mz_zip_reader_get_num_files(zipArchive.get()); i++) {
+            mz_zip_archive_file_stat file_stat;
+            if (!mz_zip_reader_file_stat(zipArchive.get(), i, &file_stat)) {
+                // TODO: log error
+                continue;
             }
+            
+            FileInfo fileInfo(BasePath(), file_stat.m_filename, false);
+            IFilePtr file(new ZipFile(fileInfo, file_stat.m_file_index, file_stat.m_uncomp_size, zipArchive));
+            outFileList.insert(file);
         }
     }
     
 private:
-    std::string m_BasePath;
+    std::string m_ZipPath;
+    std::shared_ptr<mz_zip_archive> m_ZipArchive;
     bool m_IsInitialized;
     TFileList m_FileList;
 };
 
 } // namespace vfspp
 
-#endif // NATIVEFILESYSTEM_HPP
+#endif // ZIPFILESYSTEM_HPP

@@ -2,7 +2,7 @@
 #define MEMORYFILESYSTEM_HPP
 
 #include "IFileSystem.h"
-#include "VFS.h"
+#include "Global.h"
 #include "StringUtils.hpp"
 #include "MemoryFile.hpp"
 
@@ -10,6 +10,10 @@ namespace fs = std::filesystem;
 
 namespace vfspp
 {
+
+using MemoryFileSystemPtr = std::shared_ptr<class MemoryFileSystem>;
+using MemoryFileSystemWeakPtr = std::weak_ptr<class MemoryFileSystem>;
+
 
 class MemoryFileSystem final : public IFileSystem
 {
@@ -40,6 +44,10 @@ public:
      */
     virtual void Shutdown() override
     {
+        // close all files
+        for (auto& file : m_FileList) {
+            file->Close();
+        }
         m_FileList.clear();
         m_IsInitialized = false;
     }
@@ -81,7 +89,7 @@ public:
      * Open existing file for reading, if not exists returns null for readonly filesystem. 
      * If file not exists and filesystem is writable then create new file
      */
-    virtual IFilePtr OpenFile(const FileInfo& filePath, int mode) override
+    virtual IFilePtr OpenFile(const FileInfo& filePath, IFile::FileMode mode) override
     {
         IFilePtr file = FindFile(filePath);
         bool isExists = (file != nullptr);
@@ -98,22 +106,11 @@ public:
     }
     
     /*
-     * Close file
-     */
-    virtual void CloseFile(IFilePtr file) override
-    {
-        if (!file) {
-            return;
-        }
-        file->Close();
-    }
-    
-    /*
      * Create file on writeable filesystem. Returns true if file created successfully
      */
     virtual bool CreateFile(const FileInfo& filePath) override
     {
-        IFilePtr file = OpenFile(filePath, static_cast<int>(IFile::FileMode::Write) | static_cast<int>(IFile::FileMode::Truncate));
+        IFilePtr file = OpenFile(filePath, IFile::FileMode::Write | IFile::FileMode::Truncate);
         if (file) {
             file->Close();
             return true;
@@ -142,11 +139,21 @@ public:
     virtual bool CopyFile(const FileInfo& src, const FileInfo& dest) override
     {
         MemoryFilePtr srcFile = std::static_pointer_cast<MemoryFile>(FindFile(src));
-        MemoryFilePtr dstFile = std::static_pointer_cast<MemoryFile>(OpenFile(dest, static_cast<int>(IFile::FileMode::Write) | static_cast<int>(IFile::FileMode::Truncate)));
+        MemoryFilePtr dstFile = std::static_pointer_cast<MemoryFile>(OpenFile(dest, IFile::FileMode::Write | IFile::FileMode::Truncate));
         
         if (srcFile && dstFile) {
+            bool needClose = false;
+            if (!srcFile->IsOpened()) {
+                needClose = true;
+                srcFile->Open(IFile::FileMode::Read);
+            }
+
             dstFile->m_Data.assign(srcFile->m_Data.begin(), srcFile->m_Data.end());
             dstFile->Close();
+
+            if (needClose) {
+                srcFile->Close();
+            }
 
             return true;
         }
@@ -165,52 +172,6 @@ public:
         }
         
         return result;
-    }
-    
-    /*
-     * Check if file exists on filesystem
-     */
-    virtual bool IsFileExists(const FileInfo& filePath) const override
-    {
-        return FindFile(filePath) != nullptr;
-    }
-    
-    /*
-     * Check is file
-     */
-    virtual bool IsFile(const FileInfo& filePath) const override
-    {
-        IFilePtr file = FindFile(filePath);
-        if (file) {
-            return !file->GetFileInfo().IsDir();
-        }
-        return false;
-    }
-    
-    /*
-     * Check is dir
-     */
-    virtual bool IsDir(const FileInfo& dirPath) const override
-    {
-        IFilePtr file = FindFile(dirPath);
-        if (file) {
-            return file->GetFileInfo().IsDir();
-        }
-        return false;
-    }
-
-private:
-    IFilePtr FindFile(const FileInfo& fileInfo) const
-    {
-        TFileList::const_iterator it = std::find_if(m_FileList.begin(), m_FileList.end(), [&](IFilePtr file) {
-            return file->GetFileInfo() == fileInfo;
-        });
-        
-        if (it != m_FileList.end()) {
-            return *it;
-        }
-        
-        return nullptr;
     }
     
 private:

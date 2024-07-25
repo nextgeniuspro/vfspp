@@ -1,5 +1,5 @@
-#ifndef NATIVEFILE_H
-#define NATIVEFILE_H
+#ifndef NATIVEFILE_HPP
+#define NATIVEFILE_HPP
 
 #include "IFile.h"
 
@@ -15,7 +15,7 @@ public:
     NativeFile(const FileInfo& fileInfo)
         : m_FileInfo(fileInfo)
         , m_IsReadOnly(true)
-        , m_Mode(0)
+        , m_Mode(FileMode::Read)
     {
     }
     
@@ -23,7 +23,7 @@ public:
         : m_FileInfo(fileInfo)
         , m_Stream(std::move(stream))
         , m_IsReadOnly(true)
-        , m_Mode(0)
+        , m_Mode(FileMode::Read)
     {
     }
 
@@ -47,9 +47,9 @@ public:
     {
         if (IsOpened()) {
             uint64_t curPos = Tell();
-            Seek(0, IFile::Origin::End);
+            Seek(0, Origin::End);
             uint64_t size = Tell();
-            Seek(curPos, IFile::Origin::Begin);
+            Seek(curPos, Origin::Begin);
             
             return size;
         }
@@ -68,10 +68,10 @@ public:
     /*
      * Open file for reading/writting
      */
-    virtual void Open(int mode) override
+    virtual void Open(FileMode mode) override
     {
         if (IsOpened() && m_Mode == mode) {
-            Seek(0, IFile::Origin::Begin);
+            Seek(0, Origin::Begin);
             return;
         }
         
@@ -79,18 +79,18 @@ public:
         m_IsReadOnly = true;
         
         std::ios_base::openmode open_mode = (std::ios_base::openmode)0x00;
-        if (mode & static_cast<int>(IFile::FileMode::Read)) {
+        if ((mode & FileMode::Read) == FileMode::Read) {
             open_mode |= std::fstream::in;
         }
-        if (mode & static_cast<int>(IFile::FileMode::Write)) {
+        if ((mode & FileMode::Write) == FileMode::Write) {
             m_IsReadOnly = false;
             open_mode |= std::fstream::out;
         }
-        if (mode & static_cast<int>(IFile::FileMode::Append)) {
+        if ((mode & FileMode::Append) == FileMode::Append) {
             m_IsReadOnly = false;
             open_mode |= std::fstream::app;
         }
-        if (mode & static_cast<int>(IFile::FileMode::Truncate)) {
+        if ((mode & FileMode::Truncate) == FileMode::Truncate) {
             open_mode |= std::fstream::trunc;
         }
         
@@ -156,7 +156,7 @@ public:
         }
 
         // Skip reading if file is not opened for reading
-        if ((m_Mode & static_cast<int>(IFile::FileMode::Read)) == 0) {
+        if ((m_Mode & FileMode::Read) != FileMode::Read) {
             return 0;
         }
         
@@ -173,7 +173,7 @@ public:
         }
         
         // Skip writing if file is not opened for writing
-        if ((m_Mode & static_cast<int>(IFile::FileMode::Write)) == 0) {
+        if ((m_Mode & FileMode::Write) != FileMode::Write) {
             return 0;
         }
         
@@ -185,9 +185,9 @@ private:
     FileInfo m_FileInfo;
     std::fstream m_Stream;
     bool m_IsReadOnly;
-    int m_Mode;
+    FileMode m_Mode;
 };
     
 } // namespace vfspp
 
-#endif /* NATIVEFILE_H */
+#endif // NATIVEFILE_HPP

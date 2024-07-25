@@ -1,15 +1,7 @@
-//
-//  CStringUtils.h
-//  OpenJam
-//
-//  Created by Yevgeniy Logachev on 11/19/14.
-//  Copyright (c) 2014 yev. All rights reserved.
-//
+#ifndef STRINGUTILS_HPP
+#define STRINGUTILS_HPP
 
-#ifndef STRINGUTILS_H
-#define STRINGUTILS_H
-
-#include "VFS.h"
+#include "Global.h"
 
 namespace vfspp
 {
@@ -60,4 +52,4 @@ public:
 
 }; // namespace vfspp
 
-#endif // STRINGUTILS_H
+#endif // STRINGUTILS_HPP

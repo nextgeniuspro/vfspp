@@ -1,7 +1,7 @@
-#ifndef FILEINFO_H
-#define FILEINFO_H
+#ifndef FILEINFO_HPP
+#define FILEINFO_HPP
 
-#include "VFS.h"
+#include "Global.h"
 #include "StringUtils.hpp"
 
 namespace vfspp
@@ -148,4 +148,4 @@ inline bool operator <(const FileInfo& fi1, const FileInfo& fi2)
     
 }; // namespace vfspp
 
-#endif /* FILEINFO_H */
+#endif // FILEINFO_HPP

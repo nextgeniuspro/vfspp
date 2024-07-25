@@ -1,11 +1,3 @@
-//
-//  IFileSystem.h
-//  vfspp
-//
-//  Created by Yevgeniy Logachev on 6/22/16.
-//
-//
-
 #ifndef IFILESYSTEM_H
 #define IFILESYSTEM_H
 
@@ -58,12 +50,18 @@ public:
     /*
      * Open existing file for reading, if not exists return null
      */
-    virtual IFilePtr OpenFile(const FileInfo& filePath, int mode) = 0;
+    virtual IFilePtr OpenFile(const FileInfo& filePath, IFile::FileMode mode) = 0;
     
     /*
      * Close file
      */
-    virtual void CloseFile(IFilePtr file) = 0;
+    virtual void CloseFile(IFilePtr file)
+    {
+        if (!file) {
+            return;
+        }
+        file->Close();
+    }
     
     /*
      * Create file on writeable filesystem. Return true if file already exists
@@ -88,17 +86,48 @@ public:
     /*
      * Check if file exists on filesystem
      */
-    virtual bool IsFileExists(const FileInfo& filePath) const = 0;
+    virtual bool IsFileExists(const FileInfo& filePath) const
+    {
+        return FindFile(filePath) != nullptr;
+    }
     
     /*
      * Check is file
      */
-    virtual bool IsFile(const FileInfo& filePath) const = 0;
+    virtual bool IsFile(const FileInfo& filePath) const
+    {
+        IFilePtr file = FindFile(filePath);
+        if (file) {
+            return !file->GetFileInfo().IsDir();
+        }
+        return false;
+    }
     
     /*
      * Check is dir
      */
-    virtual bool IsDir(const FileInfo& dirPath) const = 0;
+    virtual bool IsDir(const FileInfo& dirPath) const
+    {
+        IFilePtr file = FindFile(dirPath);
+        if (file) {
+            return file->GetFileInfo().IsDir();
+        }
+        return false;
+    }
+
+protected:
+    IFilePtr FindFile(const FileInfo& fileInfo) const
+    {
+        TFileList::const_iterator it = std::find_if(FileList().begin(), FileList().end(), [&](IFilePtr file) {
+            return file->GetFileInfo() == fileInfo;
+        });
+        
+        if (it != FileList().end()) {
+            return *it;
+        }
+        
+        return nullptr;
+    }
 };
 
 }; // namespace vfspp

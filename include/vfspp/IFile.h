@@ -1,7 +1,7 @@
 #ifndef IFILE_H
 #define IFILE_H
 
-#include "VFS.h"
+#include "Global.h"
 #include "FileInfo.hpp"
 
 namespace vfspp
@@ -26,7 +26,7 @@ public:
     /*
      * Open file mode
      */
-    enum class FileMode
+    enum class FileMode : uint8_t
     {
         Read = (1 << 0),
         Write = (1 << 1),
@@ -57,7 +57,7 @@ public:
     /*
      * Open file for reading/writing
      */
-    virtual void Open(int mode) = 0;
+    virtual void Open(FileMode mode) = 0;
     
     /*
      * Close file
@@ -124,40 +124,87 @@ public:
         return Write(buffer.data(), buffer.size());
     }
     
-    // /*
-    //  * Read data from file to stream
-    //  */
-    // virtual uint64_t Read(std::istream& stream, uint64_t size)
-    // {
-    //     std::vector<uint8_t> buffer(size);
-    //     uint64_t bytesRead = Read(buffer.data(), size);
-    //     stream.write(reinterpret_cast<const char*>(buffer.data()), bytesRead);
-    //     return bytesRead;
-    // }
+    /*
+     * Read data from file to stream
+     */
+    virtual uint64_t Read(std::ostream& stream, uint64_t size, uint64_t bufferSize = 1024)
+    {
+        // read chunk of data from file and write it to stream untill all data is read
+        uint64_t totalSize = size;
+        std::vector<uint8_t> buffer(bufferSize);
+        while (size > 0) {
+            uint64_t bytesRead = Read(buffer.data(), std::min(size, static_cast<uint64_t>(buffer.size())));
+			if (bytesRead == 0) {
+				break;
+			}
+
+            if (size < bytesRead) {
+				bytesRead = size;
+			}
+			
+			stream.write(reinterpret_cast<char*>(buffer.data()), bytesRead);
+
+            size -= bytesRead;          
+		}
+        
+        return totalSize - size;
+    }
     
-    // /*
-    //  * Write data from stream to file
-    //  */
-    // virtual uint64_t Write(std::ostream& stream, uint64_t size)
-    // {
-    //     std::vector<uint8_t> buffer(size);
-    //     stream.read(reinterpret_cast<char*>(buffer.data()), size);
-    //     return Write(buffer.data(), stream.gcount());
-    // }
+    /*
+     * Write data from stream to file
+     */
+    virtual uint64_t Write(std::istream& stream, uint64_t size, uint64_t bufferSize = 1024)
+    {
+        // write chunk of data from stream to file untill all data is written
+        uint64_t totalSize = size;
+        std::vector<uint8_t> buffer(bufferSize);
+        while (size > 0) {
+			stream.read(reinterpret_cast<char*>(buffer.data()), std::min(size, static_cast<uint64_t>(buffer.size())));
+			uint64_t bytesRead = stream.gcount();
+			if (bytesRead == 0) {
+				break;
+			}
+			
+			if (size < bytesRead) {
+				bytesRead = size;
+			}
+			
+			Write(buffer.data(), bytesRead);
+			
+			size -= bytesRead;
+		}
+		
+		return totalSize - size;
+    }
 };
     
-inline bool operator ==(const IFile& f1, const IFile& f2)
-{
-    return f1.GetFileInfo() == f2.GetFileInfo();
-}
-    
-inline bool operator ==(IFilePtr f1, IFilePtr f2)
+inline bool operator==(IFilePtr f1, IFilePtr f2)
 {
     if (!f1 || !f2) {
         return false;
     }
     
     return f1->GetFileInfo() == f2->GetFileInfo();
+}
+
+// Overload bitwise operators for FileMode enum class
+constexpr IFile::FileMode operator|(IFile::FileMode lhs, IFile::FileMode rhs) {
+    return static_cast<IFile::FileMode>(
+        static_cast<uint8_t>(lhs) | static_cast<uint8_t>(rhs));
+}
+
+constexpr IFile::FileMode operator&(IFile::FileMode lhs, IFile::FileMode rhs) {
+    return static_cast<IFile::FileMode>(
+        static_cast<uint8_t>(lhs) & static_cast<uint8_t>(rhs));
+}
+
+constexpr IFile::FileMode operator^(IFile::FileMode lhs, IFile::FileMode rhs) {
+    return static_cast<IFile::FileMode>(
+        static_cast<uint8_t>(lhs) ^ static_cast<uint8_t>(rhs));
+}
+
+constexpr IFile::FileMode operator~(IFile::FileMode perm) {
+    return static_cast<IFile::FileMode>(~static_cast<uint8_t>(perm));
 }
     
 } // namespace vfspp
