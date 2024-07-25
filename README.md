@@ -4,7 +4,7 @@ vfspp is a C++ Virtual File System header-only library that allows manipulation 
 
 ## Usage Example
 
-++
+```C++
 // Register native filesystem during development or zip for distribution build
 IFileSystemPtr root_fs = nullptr;
 #if defined(DISTRIBUTION_BUILD)
@@ -15,7 +15,7 @@ IFileSystemPtr root_fs = nullptr;
 
 root_fs->Initialize();
 vfs_get_global()->AddFileSystem("/", std::move(root_fs));
-
+```
 
 It's often useful to have several mounted filesystems. For example:
 - "/" as your root native filesystem
@@ -24,7 +24,7 @@ It's often useful to have several mounted filesystems. For example:
 
 Here's an example of how to set up multiple filesystems:
 
-++
+```C++
 auto root_fs = std::make_unique<CNativeFileSystem>(GetBundlePath() + "Documents/");
 auto zip_fs = std::make_unique<CZipFileSystem>("Resources.zip");
 auto mem_fs = std::make_unique<CMemoryFileSystem>();
@@ -60,29 +60,30 @@ if (auto textureFile = vfs->OpenFile(CFileInfo("/resources/background.pvr"), IFi
 	// Create texture
 	// ...
 }
+```
 
 # How To Integrate with cmake
 
 - Add vfspp as submodule to your project
-```
+```bash
 git submodule add https://github.com/nextgeniuspro/vfspp.git vendor/vfspp
 ```
 - Update submodules to download dependencies
-```
+```bash
 git submodule update --init --recursive
 ```
 - Add vfspp as subdirectory to your CMakeLists.txt
-```
+```cmake 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/vendor/vfspp vfspp_build)
 ```
 - For MSVC specify setting flag to use C++17
-```
+```cmake 
 if(MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17")
 endif(MSVC)
 ```
 - Add vfspp as dependency to your target
-```
+```cmake 
 target_link_libraries(vfsppexample PRIVATE vfspp)
 ```
 
@@ -91,10 +92,10 @@ See examples/CMakeLists.txt for example of usage
 # How To Build Example #
 
 - Navigate to 'examples' directory
-```
+```bash
 cd examples
 ```
 - Run cmake to generate project
-```
+```bash
 cmake -B ./build -G "Visual Studio 17 2022" .
 ```
