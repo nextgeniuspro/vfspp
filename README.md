@@ -68,7 +68,7 @@ if (auto textureFile = vfs->OpenFile(CFileInfo("/resources/background.pvr"), IFi
 }
 ```
 
-# How To Integrate with cmake
+## How To Integrate with cmake
 
 - Add vfspp as submodule to your project
 ```bash
@@ -90,7 +90,7 @@ target_compile_features(<your_project> PRIVATE cxx_std_17)
 
 See examples/CMakeLists.txt for example of usage
 
-# How To Build Example #
+## How To Build Example #
 
 - Navigate to 'examples' directory
 ```bash
