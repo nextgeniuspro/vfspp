@@ -117,10 +117,13 @@ public:
             mode = mode | IFile::FileMode::Truncate;
             file.reset(new NativeFile(filePath));
         }
-        file->Open(mode);
-        
-        if (!isExists && file->IsOpened()) {
-            m_FileList.insert(file);
+
+        if (file) {
+            file->Open(mode);
+       
+            if (!isExists && file->IsOpened()) {
+                m_FileList.insert(file);
+            }
         }
         
         return file;

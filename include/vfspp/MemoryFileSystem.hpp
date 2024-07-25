@@ -96,10 +96,13 @@ public:
         if (!isExists && !IsReadOnly()) {
             file.reset(new MemoryFile(filePath));
         }
-        file->Open(mode);
-        
-        if (!isExists && file->IsOpened()) {
-            m_FileList.insert(file);
+
+        if (file) {
+            file->Open(mode);
+            
+            if (!isExists && file->IsOpened()) {
+                m_FileList.insert(file);
+            }
         }
         
         return file;
