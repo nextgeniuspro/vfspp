@@ -13,7 +13,9 @@
 
 namespace vfspp
 {
-CLASS_PTR(IFile)
+
+using IFileSystemPtr = std::shared_ptr<class IFileSystem>;
+using IFileSystemWeakPtr = std::weak_ptr<class IFileSystem>;
 
 class IFileSystem
 {
@@ -56,7 +58,7 @@ public:
     /*
      * Open existing file for reading, if not exists return null
      */
-    virtual IFilePtr OpenFile(const CFileInfo& filePath, int mode) = 0;
+    virtual IFilePtr OpenFile(const FileInfo& filePath, int mode) = 0;
     
     /*
      * Close file
@@ -66,41 +68,39 @@ public:
     /*
      * Create file on writeable filesystem. Return true if file already exists
      */
-    virtual bool CreateFile(const CFileInfo& filePath) = 0;
+    virtual bool CreateFile(const FileInfo& filePath) = 0;
     
     /*
      * Remove existing file on writable filesystem
      */
-    virtual bool RemoveFile(const CFileInfo& filePath) = 0;
+    virtual bool RemoveFile(const FileInfo& filePath) = 0;
     
     /*
      * Copy existing file on writable filesystem
      */
-    virtual bool CopyFile(const CFileInfo& src, const CFileInfo& dest) = 0;
+    virtual bool CopyFile(const FileInfo& src, const FileInfo& dest) = 0;
     
     /*
      * Rename existing file on writable filesystem
      */
-    virtual bool RenameFile(const CFileInfo& src, const CFileInfo& dest) = 0;
+    virtual bool RenameFile(const FileInfo& src, const FileInfo& dest) = 0;
     
     /*
      * Check if file exists on filesystem
      */
-    virtual bool IsFileExists(const CFileInfo& filePath) const = 0;
+    virtual bool IsFileExists(const FileInfo& filePath) const = 0;
     
     /*
      * Check is file
      */
-    virtual bool IsFile(const CFileInfo& filePath) const = 0;
+    virtual bool IsFile(const FileInfo& filePath) const = 0;
     
     /*
      * Check is dir
      */
-    virtual bool IsDir(const CFileInfo& dirPath) const = 0;
+    virtual bool IsDir(const FileInfo& dirPath) const = 0;
 };
 
-
-    
 }; // namespace vfspp
 
 #endif /* IFILESYSTEM_H */
