@@ -82,8 +82,6 @@ git submodule update --init --recursive
 ```cmake 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/vendor/vfspp vfspp_build)
 ```
-- For MSVC specify setting flag to use C++17
-```cmake 
 - Add vfspp as dependency to your target and set C++17 standard
 ```cmake 
 target_link_libraries(<your_project> PRIVATE vfspp)
