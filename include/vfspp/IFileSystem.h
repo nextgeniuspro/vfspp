@@ -86,43 +86,44 @@ public:
     /*
      * Check if file exists on filesystem
      */
-    virtual bool IsFileExists(const FileInfo& filePath) const
-    {
-        return FindFile(filePath) != nullptr;
-    }
+    virtual bool IsFileExists(const FileInfo& filePath) const = 0;
     
     /*
      * Check is file
      */
-    virtual bool IsFile(const FileInfo& filePath) const
+    virtual bool IsFile(const FileInfo& filePath) const = 0;
+    
+    /*
+     * Check is dir
+     */
+    virtual bool IsDir(const FileInfo& dirPath) const = 0;
+
+protected:
+    inline bool IsFile(const FileInfo& filePath, const TFileList& fileList) const
     {
-        IFilePtr file = FindFile(filePath);
+        IFilePtr file = FindFile(filePath, fileList);
         if (file) {
             return !file->GetFileInfo().IsDir();
         }
         return false;
     }
     
-    /*
-     * Check is dir
-     */
-    virtual bool IsDir(const FileInfo& dirPath) const
+    inline bool IsDir(const FileInfo& dirPath, const TFileList& fileList) const
     {
-        IFilePtr file = FindFile(dirPath);
+        IFilePtr file = FindFile(dirPath, fileList);
         if (file) {
             return file->GetFileInfo().IsDir();
         }
         return false;
     }
 
-protected:
-    IFilePtr FindFile(const FileInfo& fileInfo) const
+    IFilePtr FindFile(const FileInfo& fileInfo, const TFileList& fileList) const
     {
-        TFileList::const_iterator it = std::find_if(FileList().begin(), FileList().end(), [&](IFilePtr file) {
+        TFileList::const_iterator it = std::find_if(fileList.begin(), fileList.end(), [&](IFilePtr file) {
             return file->GetFileInfo() == fileInfo;
         });
         
-        if (it != FileList().end()) {
+        if (it != fileList.end()) {
             return *it;
         }
         

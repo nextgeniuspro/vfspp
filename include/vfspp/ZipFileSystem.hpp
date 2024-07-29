@@ -36,23 +36,12 @@ public:
      */
     virtual void Initialize() override
     {
-        if (m_IsInitialized) {
-            return;
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            InitializeST();
+        } else {
+            InitializeST();
         }
-
-        if (!fs::is_regular_file(m_ZipPath)) {
-            return;
-        }
-
-        m_ZipArchive = std::make_shared<mz_zip_archive>();
-
-        mz_bool status = mz_zip_reader_init_file(m_ZipArchive.get(), m_ZipPath.c_str(), 0);
-        if (!status) {
-            return;
-        }
-
-        BuildFilelist(m_ZipArchive, m_FileList);
-        m_IsInitialized = true;
     }
 
     /*
@@ -60,20 +49,12 @@ public:
      */
     virtual void Shutdown() override
     {
-        m_ZipPath = "";
-        // close all files
-        for (auto& file : m_FileList) {
-            file->Close();
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            ShutdownST();
+        } else {
+            ShutdownST();
         }
-        m_FileList.clear();
-
-        // close zip archive
-        if (m_ZipArchive) {
-            mz_zip_reader_end(m_ZipArchive.get());
-            m_ZipArchive = nullptr;
-        }
-
-        m_IsInitialized = false;
     }
     
     /*
@@ -89,8 +70,12 @@ public:
      */
     virtual const std::string& BasePath() const override
     {
-        static std::string rootPath = "/";
-        return rootPath;
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return BasePathST();
+        } else {
+            return BasePathST();
+        }
     }
     
     /*
@@ -98,7 +83,12 @@ public:
      */
     virtual const TFileList& FileList() const override
     {
-        return m_FileList;
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return FileListST();
+        } else {
+            return FileListST();
+        }
     }
     
     /*
@@ -115,21 +105,12 @@ public:
      */
     virtual IFilePtr OpenFile(const FileInfo& filePath, IFile::FileMode mode) override
     {
-        // check if filesystem is readonly and mode is write then return null
-        bool requestWrite = ((mode & IFile::FileMode::Write) == IFile::FileMode::Write);
-        requestWrite |= ((mode & IFile::FileMode::Append) == IFile::FileMode::Append);
-        requestWrite |= ((mode & IFile::FileMode::Truncate) == IFile::FileMode::Truncate);
-
-        if (IsReadOnly() && requestWrite) {
-            return nullptr;
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return OpenFileST(filePath, mode);
+        } else {
+            return OpenFileST(filePath, mode);
         }
-
-        IFilePtr file = FindFile(filePath);
-        if (file) {
-            file->Open(mode);
-        }
-        
-        return file;
     }
     
     /*
@@ -164,7 +145,126 @@ public:
         return false;
     }
 
+    /*
+     * Check if file exists on filesystem
+     */
+    virtual bool IsFileExists(const FileInfo& filePath) const override
+    {
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return IsFileExistsST(filePath);
+        } else {
+            return IsFileExistsST(filePath);
+        }
+    }
+
+    /*
+     * Check is file
+     */
+    virtual bool IsFile(const FileInfo& filePath) const override
+    {
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return IFileSystem::IsFile(filePath, m_FileList);
+        } else {
+            return IFileSystem::IsFile(filePath, m_FileList);
+        }
+    }
+    
+    /*
+     * Check is dir
+     */
+    virtual bool IsDir(const FileInfo& dirPath) const override
+    {
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return IFileSystem::IsDir(dirPath, m_FileList);
+        } else {
+            return IFileSystem::IsDir(dirPath, m_FileList);
+        }
+    }
+
 private:
+    inline void InitializeST()
+    {
+        if (m_IsInitialized) {
+            return;
+        }
+
+        if (!fs::is_regular_file(m_ZipPath)) {
+            return;
+        }
+
+        m_ZipArchive = std::make_shared<mz_zip_archive>();
+
+        mz_bool status = mz_zip_reader_init_file(m_ZipArchive.get(), m_ZipPath.c_str(), 0);
+        if (!status) {
+            return;
+        }
+
+        BuildFilelist(m_ZipArchive, m_FileList);
+        m_IsInitialized = true;
+    }
+
+    inline void ShutdownST()
+    {
+        m_ZipPath = "";
+        // close all files
+        for (auto& file : m_FileList) {
+            file->Close();
+        }
+        m_FileList.clear();
+
+        // close zip archive
+        if (m_ZipArchive) {
+            mz_zip_reader_end(m_ZipArchive.get());
+            m_ZipArchive = nullptr;
+        }
+
+        m_IsInitialized = false;
+    }
+    
+    inline bool IsInitializedST() const
+    {
+        return m_IsInitialized;
+    }
+
+    inline const std::string& BasePathST() const
+    {
+        static std::string rootPath = "/";
+        return rootPath;
+    }
+
+    inline const TFileList& FileListST() const
+    {
+        return m_FileList;
+    }
+    
+    inline IFilePtr OpenFileST(const FileInfo& filePath, IFile::FileMode mode)
+    {
+        // check if filesystem is readonly and mode is write then return null
+        bool requestWrite = ((mode & IFile::FileMode::Write) == IFile::FileMode::Write);
+        requestWrite |= ((mode & IFile::FileMode::Append) == IFile::FileMode::Append);
+        requestWrite |= ((mode & IFile::FileMode::Truncate) == IFile::FileMode::Truncate);
+
+        // Note 'IsReadOnly()' is safe to call on any thread
+        if (IsReadOnly() && requestWrite) {
+            return nullptr;
+        }
+
+        IFilePtr file = FindFile(filePath, m_FileList);
+        if (file) {
+            file->Open(mode);
+        }
+        
+        return file;
+    }
+
+    inline bool IsFileExistsST(const FileInfo& filePath) const
+    {
+        return FindFile(filePath, m_FileList) != nullptr;
+    }
+
     void BuildFilelist(std::shared_ptr<mz_zip_archive> zipArchive, TFileList& outFileList)
     {
         for (mz_uint i = 0; i < mz_zip_reader_get_num_files(zipArchive.get()); i++) {
@@ -174,7 +274,7 @@ private:
                 continue;
             }
             
-            FileInfo fileInfo(BasePath(), file_stat.m_filename, false);
+            FileInfo fileInfo(BasePathST(), file_stat.m_filename, false);
             IFilePtr file(new ZipFile(fileInfo, file_stat.m_file_index, file_stat.m_uncomp_size, zipArchive));
             outFileList.insert(file);
         }
@@ -185,6 +285,7 @@ private:
     std::shared_ptr<mz_zip_archive> m_ZipArchive;
     bool m_IsInitialized;
     TFileList m_FileList;
+    mutable std::mutex m_Mutex;
 };
 
 } // namespace vfspp

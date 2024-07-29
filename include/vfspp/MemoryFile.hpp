@@ -31,7 +31,12 @@ public:
      */
     virtual const FileInfo& GetFileInfo() const override
     {
-        return m_FileInfo;
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return GetFileInfoST();
+        } else {
+            return GetFileInfoST();
+        }
     }
     
     /*
@@ -39,11 +44,12 @@ public:
      */
     virtual uint64_t Size() override
     {
-        if (IsOpened()) {
-            return m_Data.size();
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return SizeST();
+        } else {
+            return SizeST();
         }
-        
-        return 0;
     }
     
     /*
@@ -51,7 +57,12 @@ public:
      */
     virtual bool IsReadOnly() const override
     {
-        return m_IsReadOnly;
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return IsReadOnlyST();
+        } else {
+            return IsReadOnlyST();
+        }
     }
     
     /*
@@ -59,8 +70,166 @@ public:
      */
     virtual void Open(FileMode mode) override
     {
-        if (IsOpened() && m_Mode == mode) {
-            Seek(0, Origin::Begin);
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            OpenST(mode);
+        } else {
+            OpenST(mode);
+        }
+    }
+    
+    /*
+     * Close file
+     */
+    virtual void Close() override
+    {
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            CloseST();
+        } else {
+            CloseST();
+        }
+    }
+    
+    /*
+     * Check is file ready for reading/writing
+     */
+    virtual bool IsOpened() const override
+    {
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return IsOpenedST();
+        } else {
+            return IsOpenedST();
+        }
+    }
+    
+    /*
+     * Seek on a file
+     */
+    virtual uint64_t Seek(uint64_t offset, Origin origin) override
+    {
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return SeekST(offset, origin);
+        } else {
+            return SeekST(offset, origin);
+        }
+    }
+    /*
+     * Returns offset in file
+     */
+    virtual uint64_t Tell() override
+    {
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return TellST();
+        } else {
+            return TellST();
+        }
+    }
+    
+    /*
+     * Read data from file to buffer
+     */
+    virtual uint64_t Read(uint8_t* buffer, uint64_t size) override
+    {
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return ReadST(buffer, size);
+        } else {
+            return ReadST(buffer, size);
+        }
+    }
+    /*
+     * Write buffer data to file
+     */
+    virtual uint64_t Write(const uint8_t* buffer, uint64_t size) override
+    {
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return WriteST(buffer, size);
+        } else {
+            return WriteST(buffer, size);
+        }
+    }
+
+    /*
+     * Read data from file to vector
+     */
+    virtual uint64_t Read(std::vector<uint8_t>& buffer, uint64_t size) override
+    {
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return ReadST(buffer, size);
+        } else {
+            return ReadST(buffer, size);
+        }
+    }
+    
+    /*
+     * Write data from vector to file
+     */
+    virtual uint64_t Write(const std::vector<uint8_t>& buffer) override
+    {
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return WriteST(buffer);
+        } else {
+            return WriteST(buffer);
+        }
+    }
+    
+    /*
+     * Read data from file to stream
+     */
+    virtual uint64_t Read(std::ostream& stream, uint64_t size, uint64_t bufferSize = 1024) override
+    {
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return ReadST(stream, size, bufferSize);
+        } else {
+            return ReadST(stream, size, bufferSize);
+        }
+    }
+    
+    /*
+     * Write data from stream to file
+     */
+    virtual uint64_t Write(std::istream& stream, uint64_t size, uint64_t bufferSize = 1024) override
+    {
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return WriteST(stream, size, bufferSize);
+        } else {
+            return WriteST(stream, size, bufferSize);
+        }
+    }
+
+private:
+    inline const FileInfo& GetFileInfoST() const
+    {
+        return m_FileInfo;
+    }
+    
+    inline uint64_t SizeST()
+    {
+        if (IsOpenedST()) {
+            return m_Data.size();
+        }
+        
+        return 0;
+    }
+
+    inline bool IsReadOnlyST() const
+    {
+        return m_IsReadOnly;
+    }
+
+    inline void OpenST(FileMode mode)
+    {
+        if (IsOpenedST() && m_Mode == mode) {
+            SeekST(0, Origin::Begin);
             return;
         }
         
@@ -74,7 +243,7 @@ public:
         }
         if ((mode & FileMode::Append) == FileMode::Append) {
             m_IsReadOnly = false;
-            m_SeekPos = Size() > 0 ? Size() - 1 : 0;
+            m_SeekPos = SizeST() > 0 ? SizeST() - 1 : 0;
         }
         if ((mode & FileMode::Truncate) == FileMode::Truncate) {
             m_Data.clear();
@@ -82,32 +251,23 @@ public:
         
         m_IsOpened = true;
     }
-    
-    /*
-     * Close file
-     */
-    virtual void Close() override
+
+    inline void CloseST()
     {
         m_IsReadOnly = true;
         m_IsOpened = false;
         m_SeekPos = 0;
         m_Mode = FileMode::Read;
     }
-    
-    /*
-     * Check is file ready for reading/writing
-     */
-    virtual bool IsOpened() const override
+
+    inline bool IsOpenedST() const
     {
         return m_IsOpened;
     }
-    
-    /*
-     * Seek on a file
-     */
-    virtual uint64_t Seek(uint64_t offset, Origin origin) override
+
+    inline uint64_t SeekST(uint64_t offset, Origin origin)
     {
-        if (!IsOpened()) {
+        if (!IsOpenedST()) {
             return 0;
         }
         
@@ -120,22 +280,17 @@ public:
         }
         m_SeekPos = std::min(m_SeekPos, Size() - 1);
 
-        return Tell();
+        return TellST();
     }
-    /*
-     * Returns offset in file
-     */
-    virtual uint64_t Tell() override
+
+    inline uint64_t TellST()
     {
         return m_SeekPos;
     }
     
-    /*
-     * Read data from file to buffer
-     */
-    virtual uint64_t Read(uint8_t* buffer, uint64_t size) override
+    inline uint64_t ReadST(uint8_t* buffer, uint64_t size)
     {
-        if (!IsOpened()) {
+        if (!IsOpenedST()) {
             return 0;
         }
 
@@ -144,7 +299,7 @@ public:
             return 0;
         }
         
-        uint64_t leftSize = Size() - Tell();
+        uint64_t leftSize = SizeST() - TellST();
         uint64_t maxSize = std::min(size, leftSize);
         if (maxSize > 0) {
             memcpy(buffer, m_Data.data(), static_cast<size_t>(maxSize));
@@ -153,12 +308,10 @@ public:
 
         return 0;
     }
-    /*
-     * Write buffer data to file
-     */
-    virtual uint64_t Write(const uint8_t* buffer, uint64_t size) override
+
+    inline uint64_t WriteST(const uint8_t* buffer, uint64_t size)
     {
-        if (!IsOpened() || IsReadOnly()) {
+        if (!IsOpenedST() || IsReadOnlyST()) {
             return 0;
         }
         
@@ -167,13 +320,71 @@ public:
             return 0;
         }
         
-        uint64_t leftSize = Size() - Tell();
+        uint64_t leftSize = SizeST() - TellST();
         if (size > leftSize) {
             m_Data.resize((size_t)(m_Data.size() + (size - leftSize)));
         }
-        memcpy(m_Data.data() + Tell(), buffer, static_cast<size_t>(size));
+        memcpy(m_Data.data() + TellST(), buffer, static_cast<size_t>(size));
         
         return size;
+    }
+
+    inline uint64_t ReadST(std::vector<uint8_t>& buffer, uint64_t size)
+    {
+        buffer.resize(size);
+        return ReadST(buffer.data(), size);
+    }
+    
+    inline uint64_t WriteST(const std::vector<uint8_t>& buffer)
+    {
+        return WriteST(buffer.data(), buffer.size());
+    }
+    
+    inline uint64_t ReadST(std::ostream& stream, uint64_t size, uint64_t bufferSize = 1024)
+    {
+        // read chunk of data from file and write it to stream untill all data is read
+        uint64_t totalSize = size;
+        std::vector<uint8_t> buffer(bufferSize);
+        while (size > 0) {
+            uint64_t bytesRead = ReadST(buffer.data(), std::min(size, static_cast<uint64_t>(buffer.size())));
+			if (bytesRead == 0) {
+				break;
+			}
+
+            if (size < bytesRead) {
+				bytesRead = size;
+			}
+			
+			stream.write(reinterpret_cast<char*>(buffer.data()), bytesRead);
+
+            size -= bytesRead;          
+		}
+        
+        return totalSize - size;
+    }
+    
+    inline uint64_t WriteST(std::istream& stream, uint64_t size, uint64_t bufferSize = 1024)
+    {
+        // write chunk of data from stream to file untill all data is written
+        uint64_t totalSize = size;
+        std::vector<uint8_t> buffer(bufferSize);
+        while (size > 0) {
+			stream.read(reinterpret_cast<char*>(buffer.data()), std::min(size, static_cast<uint64_t>(buffer.size())));
+			uint64_t bytesRead = stream.gcount();
+			if (bytesRead == 0) {
+				break;
+			}
+			
+			if (size < bytesRead) {
+				bytesRead = size;
+			}
+			
+			WriteST(buffer.data(), bytesRead);
+			
+			size -= bytesRead;
+		}
+		
+		return totalSize - size;
     }
     
 private:
@@ -183,6 +394,7 @@ private:
     bool m_IsOpened;
     uint64_t m_SeekPos;
     FileMode m_Mode;
+    mutable std::mutex m_Mutex;
 };
     
 } // namespace vfspp

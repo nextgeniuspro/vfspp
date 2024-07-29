@@ -95,7 +95,7 @@ public:
     template<typename T>
     bool Read(T& value)
     {
-        return (Read(reinterpret_cast<uint8_t*>(&value), sizeof(value)) == sizeof(value));
+        return (Read(reinterpret_cast<uint8_t*>(&value), sizeof(value)));
     }
     
     /*
@@ -104,78 +104,28 @@ public:
     template<typename T>
     uint64_t Write(const T& value)
     {
-        return (Write(reinterpret_cast<const uint8_t*>(&value), sizeof(value)) == sizeof(value));
+        return (Write(reinterpret_cast<const uint8_t*>(&value), sizeof(value)));
     }
 
     /*
      * Read data from file to vector
      */
-    virtual uint64_t Read(std::vector<uint8_t>& buffer, uint64_t size)
-    {
-        buffer.resize(size);
-        return Read(buffer.data(), size);
-    }
+    virtual uint64_t Read(std::vector<uint8_t>& buffer, uint64_t size) = 0;
     
     /*
      * Write data from vector to file
      */
-    virtual uint64_t Write(const std::vector<uint8_t>& buffer)
-    {
-        return Write(buffer.data(), buffer.size());
-    }
-    
+    virtual uint64_t Write(const std::vector<uint8_t>& buffer) = 0;
+
     /*
      * Read data from file to stream
      */
-    virtual uint64_t Read(std::ostream& stream, uint64_t size, uint64_t bufferSize = 1024)
-    {
-        // read chunk of data from file and write it to stream untill all data is read
-        uint64_t totalSize = size;
-        std::vector<uint8_t> buffer(bufferSize);
-        while (size > 0) {
-            uint64_t bytesRead = Read(buffer.data(), std::min(size, static_cast<uint64_t>(buffer.size())));
-			if (bytesRead == 0) {
-				break;
-			}
-
-            if (size < bytesRead) {
-				bytesRead = size;
-			}
-			
-			stream.write(reinterpret_cast<char*>(buffer.data()), bytesRead);
-
-            size -= bytesRead;          
-		}
-        
-        return totalSize - size;
-    }
+    virtual uint64_t Read(std::ostream& stream, uint64_t size, uint64_t bufferSize = 1024) = 0;
     
     /*
      * Write data from stream to file
      */
-    virtual uint64_t Write(std::istream& stream, uint64_t size, uint64_t bufferSize = 1024)
-    {
-        // write chunk of data from stream to file untill all data is written
-        uint64_t totalSize = size;
-        std::vector<uint8_t> buffer(bufferSize);
-        while (size > 0) {
-			stream.read(reinterpret_cast<char*>(buffer.data()), std::min(size, static_cast<uint64_t>(buffer.size())));
-			uint64_t bytesRead = stream.gcount();
-			if (bytesRead == 0) {
-				break;
-			}
-			
-			if (size < bytesRead) {
-				bytesRead = size;
-			}
-			
-			Write(buffer.data(), bytesRead);
-			
-			size -= bytesRead;
-		}
-		
-		return totalSize - size;
-    }
+    virtual uint64_t Write(std::istream& stream, uint64_t size, uint64_t bufferSize = 1024) = 0;
 };
     
 inline bool operator==(IFilePtr f1, IFilePtr f2)

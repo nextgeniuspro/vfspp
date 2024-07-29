@@ -33,10 +33,12 @@ public:
      */
     virtual void Initialize() override
     {
-        if (m_IsInitialized) {
-            return;
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            InitializeST();
+        } else {
+            InitializeST();
         }
-        m_IsInitialized = true;
     }
 
     /*
@@ -44,12 +46,12 @@ public:
      */
     virtual void Shutdown() override
     {
-        // close all files
-        for (auto& file : m_FileList) {
-            file->Close();
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            ShutdownST();
+        } else {
+            ShutdownST();
         }
-        m_FileList.clear();
-        m_IsInitialized = false;
     }
     
     /*
@@ -57,7 +59,12 @@ public:
      */
     virtual bool IsInitialized() const override
     {
-        return m_IsInitialized;
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return IsInitializedST();
+        } else {
+            return IsInitializedST();
+        }
     }
     
     /*
@@ -65,8 +72,12 @@ public:
      */
     virtual const std::string& BasePath() const override
     {
-        static std::string basePath = "/";
-        return basePath;
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return BasePathST();
+        } else {
+            return BasePathST();
+        }
     }
     
     /*
@@ -74,7 +85,12 @@ public:
      */
     virtual const TFileList& FileList() const override
     {
-        return m_FileList;
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return FileListST();
+        } else {
+            return FileListST();
+        }
     }
     
     /*
@@ -82,7 +98,12 @@ public:
      */
     virtual bool IsReadOnly() const override
     {
-        return false;
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return IsReadOnlyST();
+        } else {
+            return IsReadOnlyST();
+        }
     }
     
     /*
@@ -91,9 +112,150 @@ public:
      */
     virtual IFilePtr OpenFile(const FileInfo& filePath, IFile::FileMode mode) override
     {
-        IFilePtr file = FindFile(filePath);
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return OpenFileST(filePath, mode);
+        } else {
+            return OpenFileST(filePath, mode);
+        }
+    }
+    
+    /*
+     * Create file on writeable filesystem. Returns true if file created successfully
+     */
+    virtual bool CreateFile(const FileInfo& filePath) override
+    {
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return CreateFileST(filePath);
+        } else {
+            return CreateFileST(filePath);
+        }
+    }
+    
+    /*
+     * Remove existing file on writable filesystem
+     */
+    virtual bool RemoveFile(const FileInfo& filePath) override
+    {
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return RemoveFileST(filePath);
+        } else {
+            return RemoveFileST(filePath);
+        }
+    }
+    
+    /*
+     * Copy existing file on writable filesystem
+     */
+    virtual bool CopyFile(const FileInfo& src, const FileInfo& dest) override
+    {
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return CopyFileST(src, dest);
+        } else {
+            return CopyFileST(src, dest);
+        }
+    }
+    
+    /*
+     * Rename existing file on writable filesystem
+     */
+    virtual bool RenameFile(const FileInfo& srcPath, const FileInfo& dstPath) override
+    {
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return RenameFileST(srcPath, dstPath);
+        } else {
+            return RenameFileST(srcPath, dstPath);
+        }
+    }
+
+    /*
+     * Check if file exists on filesystem
+     */
+    virtual bool IsFileExists(const FileInfo& filePath) const override
+    {
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return IsFileExistsST(filePath);
+        } else {
+            return IsFileExistsST(filePath);
+        }
+    }
+
+    /*
+     * Check is file
+     */
+    virtual bool IsFile(const FileInfo& filePath) const override
+    {
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return IFileSystem::IsFile(filePath, m_FileList);
+        } else {
+            return IFileSystem::IsFile(filePath, m_FileList);
+        }
+    }
+    
+    /*
+     * Check is dir
+     */
+    virtual bool IsDir(const FileInfo& dirPath) const override
+    {
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return IFileSystem::IsDir(dirPath, m_FileList);
+        } else {
+            return IFileSystem::IsDir(dirPath, m_FileList);
+        }
+    }
+
+private:
+    inline void InitializeST()
+    {
+        if (m_IsInitialized) {
+            return;
+        }
+        m_IsInitialized = true;
+    }
+
+    inline void ShutdownST()
+    {
+        // close all files
+        for (auto& file : m_FileList) {
+            file->Close();
+        }
+        m_FileList.clear();
+        m_IsInitialized = false;
+    }
+
+    inline bool IsInitializedST() const
+    {
+        return m_IsInitialized;
+    }
+
+    inline const std::string& BasePathST() const
+    {
+        static std::string basePath = "/";
+        return basePath;
+    }
+
+    inline const TFileList& FileListST() const
+    {
+        return m_FileList;
+    }
+
+    inline bool IsReadOnlyST() const
+    {
+        return false;
+    }
+
+    inline IFilePtr OpenFileST(const FileInfo& filePath, IFile::FileMode mode)
+    {
+        IFilePtr file = FindFile(filePath, m_FileList);
         bool isExists = (file != nullptr);
-        if (!isExists && !IsReadOnly()) {
+        if (!isExists && !IsReadOnlyST()) {
             file.reset(new MemoryFile(filePath));
         }
 
@@ -107,13 +269,10 @@ public:
         
         return file;
     }
-    
-    /*
-     * Create file on writeable filesystem. Returns true if file created successfully
-     */
-    virtual bool CreateFile(const FileInfo& filePath) override
+
+    inline bool CreateFileST(const FileInfo& filePath)
     {
-        IFilePtr file = OpenFile(filePath, IFile::FileMode::Write | IFile::FileMode::Truncate);
+        IFilePtr file = OpenFileST(filePath, IFile::FileMode::Write | IFile::FileMode::Truncate);
         if (file) {
             file->Close();
             return true;
@@ -121,13 +280,10 @@ public:
         
         return false;
     }
-    
-    /*
-     * Remove existing file on writable filesystem
-     */
-    virtual bool RemoveFile(const FileInfo& filePath) override
+
+    inline bool RemoveFileST(const FileInfo& filePath)
     {
-        IFilePtr file = FindFile(filePath);
+        IFilePtr file = FindFile(filePath, m_FileList);
         if (!file) {
             return false;
         }
@@ -135,14 +291,11 @@ public:
         m_FileList.erase(file);
         return true;
     }
-    
-    /*
-     * Copy existing file on writable filesystem
-     */
-    virtual bool CopyFile(const FileInfo& src, const FileInfo& dest) override
+
+    inline bool CopyFileST(const FileInfo& src, const FileInfo& dest)
     {
-        MemoryFilePtr srcFile = std::static_pointer_cast<MemoryFile>(FindFile(src));
-        MemoryFilePtr dstFile = std::static_pointer_cast<MemoryFile>(OpenFile(dest, IFile::FileMode::Write | IFile::FileMode::Truncate));
+        MemoryFilePtr srcFile = std::static_pointer_cast<MemoryFile>(FindFile(src, m_FileList));
+        MemoryFilePtr dstFile = std::static_pointer_cast<MemoryFile>(OpenFileST(dest, IFile::FileMode::Write | IFile::FileMode::Truncate));
         
         if (srcFile && dstFile) {
             bool needClose = false;
@@ -163,23 +316,26 @@ public:
 
         return false;
     }
-    
-    /*
-     * Rename existing file on writable filesystem
-     */
-    virtual bool RenameFile(const FileInfo& srcPath, const FileInfo& dstPath) override
+
+    inline bool RenameFileST(const FileInfo& srcPath, const FileInfo& dstPath)
     {
-        bool result = CopyFile(srcPath, dstPath);
+        bool result = CopyFileST(srcPath, dstPath);
         if (result)  {
-            result = RemoveFile(srcPath);
+            result = RemoveFileST(srcPath);
         }
         
         return result;
+    }
+
+    inline bool IsFileExistsST(const FileInfo& filePath) const
+    {
+        return FindFile(filePath, m_FileList) != nullptr;
     }
     
 private:
     bool m_IsInitialized;
     TFileList m_FileList;
+    mutable std::mutex m_Mutex;
 };
 
 } // namespace vfspp

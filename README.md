@@ -1,6 +1,6 @@
 # vfspp
 
-vfspp is a C++ Virtual File System header-only library that allows manipulation of files from memory, zip archives, or native filesystems as if they were part of a single native filesystem. This is particularly useful for game developers who want to use resources in the native filesystem during development and then pack them into an archive for distribution builds. Note: This library requires C++17 or later.
+vfspp is a C++ Virtual File System header-only library that allows manipulation of files from memory, zip archives, or native filesystems as if they were part of a single native filesystem. This is particularly useful for game developers who want to use resources in the native filesystem during development and then pack them into an archive for distribution builds. The library is thread-safe, ensuring safe operations in multi-threaded environments. Note: This library requires C++17 or later.
 
 ## Usage Example
 
@@ -28,6 +28,9 @@ It's often useful to have several mounted filesystems. For example:
 Here's an example of how to set up multiple filesystems:
 
 ```C++
+// add 'VFSPP_ENABLE_MULTITHREADING' preprocessor definition to enable thread-safe operations
+#define VFSPP_ENABLE_MULTITHREADING 
+
 auto rootFS = std::make_unique<NativeFileSystem>(GetBundlePath() + "Documents/");
 auto zipFS = std::make_unique<ZipFileSystem>("Resources.zip");
 auto memFS = std::make_unique<MemoryFileSystem>();
@@ -89,6 +92,10 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/vendor/vfspp vfspp_build)
 ```cmake 
 target_link_libraries(<your_project> PRIVATE vfspp)
 target_compile_features(<your_project> PRIVATE cxx_std_17)
+```
+- To add multi-threading support, add 'VFSPP_ENABLE_MULTITHREADING' preprocessor definition to your target
+```cmake
+add_compile_definitions(VFSPP_ENABLE_MULTITHREADING)
 ```
 
 See examples/CMakeLists.txt for example of usage
