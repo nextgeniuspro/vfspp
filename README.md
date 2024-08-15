@@ -74,6 +74,46 @@ if (auto textureFile = vfs->OpenFile(FileInfo("/resources/background.pvr"), IFil
 }
 ```
 
+### Patching/DLC feature
+
+vfspp supports patching/DLC feature. You can mount multiple filesystems to the same alias and access files merged from all filesystem. For example, you can mount the base game filesystem and the patch filesystem. If the file is present in the patch filesystem, it will be used; otherwise, the file from the base game filesystem will be used. Serach order is from the last mounted filesystem to the first mounted filesystem. The first filesystem mounted to the alias will be the default filesystem, so creating a new file will be created in the first filesystem.
+
+```C++
+IFileSystemPtr dlc1FS(new NativeFileSystem("../test-data/dlc1"));
+IFileSystemPtr dlc2FS(new NativeFileSystem("../test-data/dlc2"));
+
+dlc1FS->Initialize();
+dlc2FS->Initialize();
+
+vfs->AddFileSystem("/dlc", dlc1FS);
+	
+IFilePtr dlcFile = vfs->OpenFile(FileInfo("/dlc/file.txt"), IFile::FileMode::Read);
+if (dlcFile && dlcFile->IsOpened()) {
+	PrintFile("File /dlc/file.txt that exists in dlc1:", dlcFile);
+	dlcFile->Close();
+}
+
+vfs->AddFileSystem("/dlc", dlc2FS);
+
+dlcFile = vfs->OpenFile(FileInfo("/dlc/file.txt"), IFile::FileMode::Read);
+if (dlcFile && dlcFile->IsOpened()) {
+	PrintFile("File /dlc/file.txt patched by dlc2:", dlcFile);
+	dlcFile->Close();
+}
+
+IFilePtr dlcFile1 = vfs->OpenFile(FileInfo("/dlc/file1.txt"), IFile::FileMode::Read);
+if (dlcFile1 && dlcFile1->IsOpened()) {
+	PrintFile("File /dlc/file1.txt that exists only in dlc1:", dlcFile1);
+	dlcFile1->Close();
+}
+
+IFilePtr dlcFile2 = vfs->OpenFile(FileInfo("/dlc/file2.txt"), IFile::FileMode::Read);
+if (dlcFile2 && dlcFile2->IsOpened()) {
+	PrintFile("File /dlc/file2.txt that exists only in dlc2:", dlcFile2);
+	dlcFile2->Close();
+}
+```
+
 ## How To Integrate with cmake
 
 - Add vfspp as submodule to your project

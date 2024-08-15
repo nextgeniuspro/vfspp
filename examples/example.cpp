@@ -95,11 +95,13 @@ int main()
     IFilePtr dlcFile1 = vfs->OpenFile(FileInfo("/dlc/file1.txt"), IFile::FileMode::Read);
     if (dlcFile1 && dlcFile1->IsOpened()) {
         PrintFile("File /dlc/file1.txt that exists only in dlc1:", dlcFile1);
+        dlcFile1->Close();
     }
 
     IFilePtr dlcFile2 = vfs->OpenFile(FileInfo("/dlc/file2.txt"), IFile::FileMode::Read);
     if (dlcFile2 && dlcFile2->IsOpened()) {
         PrintFile("File /dlc/file2.txt that exists only in dlc2:", dlcFile2);
+        dlcFile2->Close();
     }
 
 	return 0;
