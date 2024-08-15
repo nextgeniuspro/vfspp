@@ -10,3 +10,13 @@ add_compile_definitions(VFSPP_ENABLE_MULTITHREADING)
 
 target_link_libraries(vfsppexample PRIVATE vfspp)
 target_compile_features(vfsppexample PRIVATE cxx_std_17)
+
+# Specify the output directory
+set(COPY_DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/test-data)
+
+# Add a post-build step to copy the whole directory
+add_custom_command(TARGET vfsppexample POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${CMAKE_SOURCE_DIR}/test-data
+    ${COPY_DESTINATION}
+)
