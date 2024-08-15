@@ -76,7 +76,7 @@ if (auto textureFile = vfs->OpenFile(FileInfo("/resources/background.pvr"), IFil
 
 ### Patching/DLC feature
 
-vfspp supports patching/DLC feature. You can mount multiple filesystems to the same alias and access files merged from all filesystem. For example, you can mount the base game filesystem and the patch filesystem. If the file is present in the patch filesystem, it will be used; otherwise, the file from the base game filesystem will be used. Serach order is from the last mounted filesystem to the first mounted filesystem. The first filesystem mounted to the alias will be the default filesystem, so creating a new file will be created in the first filesystem.
+vfspp supports patching/DLC feature. You can mount multiple filesystems to the same alias and access files merged from all filesystems. For example, you can mount the base game filesystem and the patch filesystem. If the file is present in the patch filesystem, it will be used; otherwise, the file from the base game filesystem will be used. Search order performed from the last mounted filesystem to the first filesystem. The first filesystem mounted to the alias will be the default filesystem, so creating a new file will be created in the first 'base' filesystem.
 
 ```C++
 IFileSystemPtr dlc1FS(new NativeFileSystem("../test-data/dlc1"));
