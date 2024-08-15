@@ -211,7 +211,7 @@ private:
         m_ZipPath = "";
         // close all files
         for (auto& file : m_FileList) {
-            file->Close();
+            file.second->Close();
         }
         m_FileList.clear();
 
@@ -276,7 +276,7 @@ private:
             
             FileInfo fileInfo(BasePathST(), file_stat.m_filename, false);
             IFilePtr file(new ZipFile(fileInfo, file_stat.m_file_index, file_stat.m_uncomp_size, zipArchive));
-            outFileList.insert(file);
+            outFileList[fileInfo.AbsolutePath()] = file;
         }
     }
     

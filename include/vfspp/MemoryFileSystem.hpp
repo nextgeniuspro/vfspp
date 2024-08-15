@@ -224,7 +224,7 @@ private:
     {
         // close all files
         for (auto& file : m_FileList) {
-            file->Close();
+            file.second->Close();
         }
         m_FileList.clear();
         m_IsInitialized = false;
@@ -263,7 +263,7 @@ private:
             file->Open(mode);
             
             if (!isExists && file->IsOpened()) {
-                m_FileList.insert(file);
+                m_FileList[filePath.AbsolutePath()] = file;
             }
         }
         
@@ -283,13 +283,8 @@ private:
 
     inline bool RemoveFileST(const FileInfo& filePath)
     {
-        IFilePtr file = FindFile(filePath, m_FileList);
-        if (!file) {
-            return false;
-        }
-
-        m_FileList.erase(file);
-        return true;
+        auto numRemoved = m_FileList.erase(filePath.AbsolutePath());
+        return numRemoved > 0;
     }
 
     inline bool CopyFileST(const FileInfo& src, const FileInfo& dest)

@@ -62,7 +62,7 @@ int main()
     IFileSystem::TFileList files = zipFS->FileList();
     for (auto& file : files)
 	{
-		printf("Zip file entry: %s\n", file->GetFileInfo().AbsolutePath().c_str());
+		printf("Zip file entry: %s\n", file.first.c_str());
 	}
 
     IFilePtr zipFile = vfs->OpenFile(FileInfo("/zip/file.txt"), IFile::FileMode::Read);

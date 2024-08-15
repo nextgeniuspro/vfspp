@@ -231,7 +231,7 @@ private:
         m_BasePath = "";
         // close all files
         for (auto& file : m_FileList) {
-            file->Close();
+            file.second->Close();
         }
         m_FileList.clear();
         m_IsInitialized = false;
@@ -284,7 +284,7 @@ private:
             file->Open(mode);
        
             if (!isExists && file->IsOpened()) {
-                m_FileList.insert(file);
+                m_FileList[filePath.AbsolutePath()] = file;
             }
         }
         
@@ -308,12 +308,7 @@ private:
             return false;
         }
         
-        IFilePtr file = FindFile(filePath, m_FileList);
-        if (!file) {
-            return false;
-        }
-
-        m_FileList.erase(file);
+        m_FileList.erase(filePath.AbsolutePath());
         return fs::remove(filePath.AbsolutePath());
     }
     
@@ -358,7 +353,7 @@ private:
             } else if (fs::is_regular_file(entry.status())) {
                 FileInfo fileInfo(basePath, filename, false);
                 IFilePtr file(new NativeFile(fileInfo));
-                outFileList.insert(file);
+                outFileList[fileInfo.AbsolutePath()] = file;
             }
         }
     }
