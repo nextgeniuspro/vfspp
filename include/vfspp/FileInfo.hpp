@@ -91,7 +91,7 @@ public:
 private:
     void Configure(const std::string& basePath, const std::string& fileName, bool isDir)
     {
-        m_Path = fs::path(basePath) / fs::path(fileName);
+        m_Path = (fs::path(basePath) / fs::path(fileName)).generic_string();
         m_IsDir = isDir;
     }
     
