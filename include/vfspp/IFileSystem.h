@@ -55,14 +55,8 @@ public:
     /*
      * Close file
      */
-    virtual void CloseFile(IFilePtr file)
-    {
-        if (!file) {
-            return;
-        }
-        file->Close();
-    }
-    
+    virtual void CloseFile(IFilePtr file) = 0;
+
     /*
      * Create file on writeable filesystem. Return true if file already exists
      */
@@ -129,4 +123,4 @@ protected:
 
 }; // namespace vfspp
 
-#endif /* IFILESYSTEM_H */
+#endif // IFILESYSTEM_H

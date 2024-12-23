@@ -314,8 +314,15 @@ private:
             return 0;
         }
         
-        m_Stream.read(reinterpret_cast<char*>(buffer), size);
-        return static_cast<uint64_t>(m_Stream.gcount());
+        
+        uint64_t leftSize = SizeST() - TellST();
+        uint64_t maxSize = std::min(size, leftSize);
+        if (maxSize > 0) {
+            m_Stream.read(reinterpret_cast<char*>(buffer), maxSize);
+            return maxSize;
+        }
+
+        return 0;
     }
 
     inline uint64_t WriteST(const uint8_t* buffer, uint64_t size)
@@ -373,22 +380,22 @@ private:
         uint64_t totalSize = size;
         std::vector<uint8_t> buffer(bufferSize);
         while (size > 0) {
-			stream.read(reinterpret_cast<char*>(buffer.data()), std::min(size, static_cast<uint64_t>(buffer.size())));
-			uint64_t bytesRead = stream.gcount();
-			if (bytesRead == 0) {
-				break;
-			}
-			
-			if (size < bytesRead) {
-				bytesRead = size;
-			}
-			
-			WriteST(buffer.data(), bytesRead);
-			
-			size -= bytesRead;
-		}
-		
-		return totalSize - size;
+            stream.read(reinterpret_cast<char*>(buffer.data()), std::min(size, static_cast<uint64_t>(buffer.size())));
+            uint64_t bytesRead = static_cast<uint64_t>(stream.gcount());
+            if (bytesRead == 0) {
+                break;
+            }
+
+            if (size < bytesRead) {
+                bytesRead = size;
+            }
+
+            WriteST(buffer.data(), bytesRead);
+
+            size -= bytesRead;
+        }
+        
+        return totalSize - size;
     }
     
 private:

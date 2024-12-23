@@ -237,7 +237,6 @@ private:
         m_SeekPos = 0;
         m_IsReadOnly = true;
         
-        std::ios_base::openmode open_mode = static_cast<std::ios_base::openmode>(0x00);
         if ((mode & FileMode::Write) == FileMode::Write) {
             m_IsReadOnly = false;
         }

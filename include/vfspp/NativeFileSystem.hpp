@@ -119,6 +119,19 @@ public:
             return OpenFileST(filePath, mode);
         }
     }
+
+    /*
+     * Close file
+     */
+    virtual void CloseFile(IFilePtr file) override
+    {
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            CloseFileST(file);
+        } else {
+            CloseFileST(file);
+        }
+    }
     
     /*
      * Create file on writeable filesystem. Returns true if file created successfully
@@ -289,6 +302,13 @@ private:
         }
         
         return file;
+    }
+
+    inline void CloseFileST(IFilePtr file)
+    {
+        if (file) {
+            file->Close();
+        }
     }
     
     inline bool CreateFileST(const FileInfo& filePath)
