@@ -30,3 +30,5 @@
 /build
 /examples/build
 .vscode/settings.json
+
+/out/**
