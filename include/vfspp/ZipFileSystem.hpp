@@ -144,7 +144,13 @@ public:
     {
         return false;
     }
-
+    /*
+    * Close file 
+    */
+    virtual void CloseFile(IFilePtr file) override
+    {
+        //NO-OP
+    }
     /*
      * Check if file exists on filesystem
      */
