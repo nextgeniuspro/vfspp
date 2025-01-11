@@ -32,3 +32,5 @@
 .vscode/settings.json
 
 /out/**
+
+/.vs
