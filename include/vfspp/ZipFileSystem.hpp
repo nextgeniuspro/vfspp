@@ -5,8 +5,12 @@
 #include "Global.h"
 #include "StringUtils.hpp"
 #include "ZipFile.hpp"
-#include "zip_file.hpp"
+#include "miniz_cpp.hpp"
 
+#ifdef _WIN32
+#undef CreateFile
+#undef CopyFile
+#endif
 namespace fs = std::filesystem;
 
 namespace vfspp
