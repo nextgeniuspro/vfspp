@@ -1,5 +1,4 @@
 cmake_minimum_required(VERSION 3.10)
-
 # Project name and version
 project(vfspp VERSION 1.0 LANGUAGES CXX)
 option(BUILD_EXAMPLES "Build examples" OFF)
@@ -27,3 +26,4 @@ target_compile_features(vfspp INTERFACE cxx_std_17)
 if (BUILD_EXAMPLES)
 add_subdirectory(examples)
 endif()
+

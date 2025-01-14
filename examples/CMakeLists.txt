@@ -17,6 +17,6 @@ set(COPY_DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/test-data)
 # Add a post-build step to copy the whole directory
 add_custom_command(TARGET vfsppexample POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-    ${CMAKE_SOURCE_DIR}/test-data
+    ${CMAKE_CURRENT_SOURCE_DIR}/test-data
     ${COPY_DESTINATION}
 )
