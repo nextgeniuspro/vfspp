@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 
 project(vfsppexample)
 
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/.. vfspp_build)
+#add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/.. vfspp_build)
 
 add_executable(vfsppexample example.cpp)
 
@@ -17,6 +17,6 @@ set(COPY_DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/test-data)
 # Add a post-build step to copy the whole directory
 add_custom_command(TARGET vfsppexample POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-    ${CMAKE_SOURCE_DIR}/test-data
+    ${CMAKE_CURRENT_SOURCE_DIR}/test-data
     ${COPY_DESTINATION}
 )
