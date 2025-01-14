@@ -246,7 +246,7 @@ private:
         m_Mode = mode;
         m_IsReadOnly = true;
         
-        std::ios_base::openmode open_mode = (std::ios_base::openmode)0x00;
+        std::ios_base::openmode open_mode = std::ios_base::binary;
         if ((mode & FileMode::Read) == FileMode::Read) {
             open_mode |= std::fstream::in;
         }
