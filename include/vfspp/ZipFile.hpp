@@ -2,7 +2,7 @@
 #define ZIPFILE_HPP
 
 #include "IFile.h"
-#include "zip_file.hpp"
+#include "miniz_cpp.hpp"
 
 namespace vfspp
 {
