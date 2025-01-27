@@ -142,11 +142,13 @@ See examples/CMakeLists.txt for example of usage
 
 ## How To Build Example #
 
-- Navigate to 'examples' directory
+- Run cmake to generate project windows project files
 ```bash
-cd examples
-```
-- Run cmake to generate project
+cmake -B ./build -G "Visual Studio 17 2022" . -DBUILD_EXAMPLES=1
+``` 
+or to generate Xcode project files
 ```bash
-cmake -B ./build -G "Visual Studio 17 2022" .
+cmake -B ./build -G "Xcode" . -DBUILD_EXAMPLES=1
 ```
+
+- Open generated project files and build the target `vfsppexample`
