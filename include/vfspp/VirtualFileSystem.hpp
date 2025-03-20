@@ -217,7 +217,51 @@ public:
             return fn();
         }
     }
-    
+
+    std::string AbsolutePath(std::string_view relativePath)
+    {
+        std::function<std::string()> fn = [&]() -> std::string {
+            std::string strRelativePath = std::string(relativePath);
+            for (const std::string& alias : m_SortedAlias) {
+                if (!StringUtils::StartsWith(strRelativePath, alias)) {
+                    continue;
+                }
+
+                // Strip alias from file path
+                std::string strippedRelativePath = strRelativePath.substr(alias.length());
+
+                // Enumerate reverse to get filesystems in order of registration
+                const TFileSystemList& filesystems = GetFilesystemsST(alias);
+                if (filesystems.empty()) {
+                    continue;
+                }
+
+                for (auto it = filesystems.rbegin(); it != filesystems.rend(); ++it) {
+                    // Is it last filesystem
+                    IFileSystemPtr fs = *it;
+                    bool isMain = (fs == filesystems.front());
+
+                    // If file exists in filesystem we try to open it. 
+                    // In case file not exists and we are in first filesystem we try to create new file if mode allows it
+                    FileInfo realPath(fs->BasePath(), strippedRelativePath, false);
+                    if (fs->IsFileExists(realPath) || isMain) {
+                        return realPath.AbsolutePath();
+                    }
+                }
+            }
+
+            return "";
+            };
+
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return fn();
+        }
+        else {
+            return fn();
+        }
+    }
+
 private:
     inline const TFileSystemList& GetFilesystemsST(std::string alias)
     {

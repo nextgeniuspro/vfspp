@@ -1,6 +1,7 @@
 #include "vfspp/VFS.h"
 
 using namespace vfspp;
+using namespace std::string_view_literals;
 
 void PrintFile(const std::string& msg, IFilePtr file)
 {
@@ -30,6 +31,7 @@ int main()
 
     printf("Native filesystem test:\n");
 
+	auto test = vfs->AbsolutePath("/test.txt"sv);
     IFilePtr file = vfs->OpenFile(FileInfo("/test.txt"), IFile::FileMode::ReadWrite);
     if (file && file->IsOpened()) {
         char data[] = "The quick brown fox jumps over the lazy dog\n";
