@@ -290,8 +290,12 @@ private:
             dir = std::ios_base::cur;
         }
         
+        // Seek both read and write pointers to keep them synchronized
         m_Stream.seekg(offset, dir);
+        m_Stream.seekp(offset, dir);
+        
         if (m_Stream.fail()) {
+            m_Stream.clear();
             return 0;
         }
 
@@ -300,7 +304,19 @@ private:
 
     inline uint64_t TellST()
     {
-        return static_cast<uint64_t>(m_Stream.tellg());
+        if (!IsOpenedST()) {
+            return 0;
+        }
+        
+        if ((m_Mode & FileMode::Read) == FileMode::Read) {
+            auto pos = m_Stream.tellg();
+            return (pos != std::streampos(-1)) ? static_cast<uint64_t>(pos) : 0;
+        } else if ((m_Mode & FileMode::Write) == FileMode::Write) {
+            auto pos = m_Stream.tellp();
+            return (pos != std::streampos(-1)) ? static_cast<uint64_t>(pos) : 0;
+        }
+        
+        return 0;
     }
     
     inline uint64_t ReadST(uint8_t* buffer, uint64_t size)
@@ -313,13 +329,17 @@ private:
         if ((m_Mode & FileMode::Read) != FileMode::Read) {
             return 0;
         }
-        
-        
+                
         uint64_t leftSize = SizeST() - TellST();
         uint64_t maxSize = std::min(size, leftSize);
         if (maxSize > 0) {
             m_Stream.read(reinterpret_cast<char*>(buffer), maxSize);
-            return maxSize;
+            if (m_Stream.good() || m_Stream.eof()) {
+                return static_cast<uint64_t>(m_Stream.gcount());
+            }
+            // Clear error flags for failed read
+            m_Stream.clear();
+            return 0;
         }
 
         return 0;
@@ -337,7 +357,10 @@ private:
         }
         
         m_Stream.write(reinterpret_cast<const char*>(buffer), size);
-        return static_cast<uint64_t>(m_Stream.gcount());
+        if (m_Stream.good()) {
+            return size;
+        }
+        return 0;
     }
 
     inline uint64_t ReadST(std::vector<uint8_t>& buffer, uint64_t size)

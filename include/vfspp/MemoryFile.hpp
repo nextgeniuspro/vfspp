@@ -273,11 +273,11 @@ private:
         if (origin == Origin::Begin) {
             m_SeekPos = offset;
         } else if (origin == Origin::End) {
-            m_SeekPos = Size() - offset;
+            m_SeekPos = (offset <= SizeST()) ? SizeST() - offset : 0;
         } else if (origin == Origin::Set) {
             m_SeekPos += offset;
         }
-        m_SeekPos = std::min(m_SeekPos, Size() - 1);
+        m_SeekPos = std::min(m_SeekPos, SizeST());
 
         return TellST();
     }
@@ -301,7 +301,8 @@ private:
         uint64_t leftSize = SizeST() - TellST();
         uint64_t maxSize = std::min(size, leftSize);
         if (maxSize > 0) {
-            memcpy(buffer, m_Data.data(), static_cast<size_t>(maxSize));
+            memcpy(buffer, m_Data.data() + m_SeekPos, static_cast<size_t>(maxSize));
+            m_SeekPos += maxSize;
             return maxSize;
         }
 
@@ -321,9 +322,14 @@ private:
         
         uint64_t leftSize = SizeST() - TellST();
         if (size > leftSize) {
-            m_Data.resize((size_t)(m_Data.size() + (size - leftSize)));
+            uint64_t newSize = TellST() + size;
+            if (newSize > static_cast<uint64_t>(std::numeric_limits<size_t>::max())) {
+                return 0;
+            }
+            m_Data.resize(static_cast<size_t>(newSize));
         }
         memcpy(m_Data.data() + TellST(), buffer, static_cast<size_t>(size));
+        m_SeekPos += size; 
         
         return size;
     }

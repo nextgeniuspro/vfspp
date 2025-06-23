@@ -253,6 +253,10 @@ private:
         
         m_Data.resize(m_Size);
         m_IsOpened = mz_zip_reader_extract_to_mem_no_alloc(zipArchive.get(), m_EntryID, m_Data.data(), static_cast<size_t>(m_Size), 0, 0, 0);
+        
+        if (!m_IsOpened) {
+            m_Data.clear();
+        }
     }
     
     inline void CloseST()
@@ -277,11 +281,11 @@ private:
         if (origin == IFile::Origin::Begin) {
             m_SeekPos = offset;
         } else if (origin == IFile::Origin::End) {
-            m_SeekPos = SizeST() - offset;
+            m_SeekPos = (offset <= SizeST()) ? SizeST() - offset : 0;
         } else if (origin == IFile::Origin::Set) {
             m_SeekPos += offset;
         }
-        m_SeekPos = std::min(m_SeekPos, SizeST() - 1);
+        m_SeekPos = std::min(m_SeekPos, SizeST());
 
         return TellST();
     }
@@ -300,7 +304,8 @@ private:
         uint64_t leftSize = SizeST() - TellST();
         uint64_t maxSize = std::min(size, leftSize);
         if (maxSize > 0) {
-            memcpy(buffer, m_Data.data(), static_cast<size_t>(maxSize));
+            memcpy(buffer, m_Data.data() + m_SeekPos, static_cast<size_t>(maxSize));
+            m_SeekPos += maxSize;
             return maxSize;
         }
 
