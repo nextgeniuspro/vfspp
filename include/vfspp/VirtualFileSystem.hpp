@@ -262,6 +262,43 @@ public:
         }
     }
 
+    bool IsFileExists(std::string_view relativePath)
+    {
+        std::function<bool()> fn = [&]() -> bool {
+            std::string strRelativePath = std::string(relativePath);
+            for (const std::string& alias : m_SortedAlias) {
+                if (!StringUtils::StartsWith(strRelativePath, alias)) {
+                    continue;
+                }
+
+                // Strip alias from file path
+                std::string strippedRelativePath = strRelativePath.substr(alias.length());
+
+                // Enumerate reverse to get filesystems in order of registration
+                const TFileSystemList& filesystems = GetFilesystemsST(alias);
+                if (filesystems.empty()) {
+                    continue;
+                }
+
+                for (auto it = filesystems.rbegin(); it != filesystems.rend(); ++it) {
+                    IFileSystemPtr fs = *it;
+                    FileInfo realPath(fs->BasePath(), strippedRelativePath, false);
+                    return fs->IsFileExists(realPath);
+                }
+            }
+
+            return false;
+            };
+
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return fn();
+        }
+        else {
+            return fn();
+        }
+    }
+
 private:
     inline const TFileSystemList& GetFilesystemsST(std::string alias)
     {
