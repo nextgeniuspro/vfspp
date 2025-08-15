@@ -1,8 +1,6 @@
-cmake_minimum_required(VERSION 3.50)
+cmake_minimum_required(VERSION 3.16)
 
 project(vfsppexample)
-
-#add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/.. vfspp_build)
 
 add_executable(vfsppexample example.cpp)
 
@@ -11,11 +9,16 @@ add_compile_definitions(VFSPP_ENABLE_MULTITHREADING)
 target_link_libraries(vfsppexample PRIVATE vfspp::vfspp)
 target_compile_features(vfsppexample PRIVATE cxx_std_17)
 
-# Specify the output directory
-set(COPY_SOURCE ${CMAKE_SOURCE_DIR}/examples/test-data)
-set(COPY_DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/test-data)
-
-# Add a post-build step to copy the whole directory
+# Copy test-data folder next to the produced binary
+set(VFSPP_EXAMPLE_TESTDATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test-data)
 add_custom_command(TARGET vfsppexample POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${COPY_SOURCE} ${COPY_DESTINATION}
+    COMMAND ${CMAKE_COMMAND} -E echo "Copying test-data to $<TARGET_FILE_DIR:vfsppexample>/test-data"
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "$<TARGET_FILE_DIR:vfsppexample>/test-data"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${VFSPP_EXAMPLE_TESTDATA_DIR}" "$<TARGET_FILE_DIR:vfsppexample>/test-data"
+    VERBATIM
 )
+
+# Ensure Visual Studio debugger runs from the executable directory so relative 'test-data/...'
+if (MSVC)
+    set_property(TARGET vfsppexample PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:vfsppexample>")
+endif()

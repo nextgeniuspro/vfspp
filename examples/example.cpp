@@ -17,9 +17,10 @@ void PrintFile(const std::string& msg, IFilePtr file)
 int main()
 {
 	VirtualFileSystemPtr vfs(new VirtualFileSystem());
-    IFileSystemPtr rootFS(new NativeFileSystem("../test-data/files"));
+    // Paths now relative to working directory where executable resides with copied test-data
+    IFileSystemPtr rootFS(new NativeFileSystem("test-data/files"));
     IFileSystemPtr memFS(new MemoryFileSystem());
-    IFileSystemPtr zipFS(new ZipFileSystem("../test-data/test.zip"));
+    IFileSystemPtr zipFS(new ZipFileSystem("test-data/test.zip"));
 
     rootFS->Initialize();
     memFS->Initialize();
@@ -72,8 +73,8 @@ int main()
 
     printf("DLC filesystem test:\n");
     
-    IFileSystemPtr dlc1FS(new NativeFileSystem("../test-data/dlc1"));
-    IFileSystemPtr dlc2FS(new NativeFileSystem("../test-data/dlc2"));
+    IFileSystemPtr dlc1FS(new NativeFileSystem("test-data/dlc1"));
+    IFileSystemPtr dlc2FS(new NativeFileSystem("test-data/dlc2"));
 
     dlc1FS->Initialize();
     dlc2FS->Initialize();

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.50)
+cmake_minimum_required(VERSION 3.16)
 
 # Project name and version
 project(vfspp VERSION 1.0 LANGUAGES CXX)
