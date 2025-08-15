@@ -253,7 +253,7 @@ public:
             }
 
             return "";
-            };
+        };
 
         if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
             std::lock_guard<std::mutex> lock(m_Mutex);
@@ -271,66 +271,64 @@ public:
      */
     std::vector<std::string> ListAllFiles() const
     {
-        std::function<std::vector<std::string>()> fn = [&]() -> std::vector<std::string> {
-            std::vector<std::string> allFiles;
-            std::unordered_set<std::string> seenFiles;
-            
-            for (const std::string& alias : m_SortedAlias) {
-                const TFileSystemList& filesystems = const_cast<VirtualFileSystem*>(this)->GetFilesystemsST(alias);
-                if (filesystems.empty()) {
-                    continue;
-                }
-                
-                // Enumerate reverse to give priority to later registered filesystems
-                for (auto it = filesystems.rbegin(); it != filesystems.rend(); ++it) {
-                    IFileSystemPtr fs = *it;
-                    if (!fs || !fs->IsInitialized()) {
-                        continue;
-                    }
-                    
-                    const IFileSystem::TFileList& fileList = fs->FileList();
-                    
-                    for (const auto& [relativePath, filePtr] : fileList) {
-                        if (!filePtr || filePtr->GetFileInfo().IsDir()) {
-                            continue;
-                        }
-                        
-                        std::string fullPath = alias;
-                        
-                        // Handle path joining to avoid double slashes
-                        if (!relativePath.empty()) {
-                            if (relativePath.front() == '/' && fullPath.back() == '/') {
-                                fullPath += relativePath.substr(1);
-                            } else if (relativePath.front() != '/' && fullPath.back() != '/') {
-                                fullPath += "/" + relativePath;
-                            } else {
-                                fullPath += relativePath;
-                            }
-                        }
-                        
-                        // Only add if not seen before (priority to later filesystems)
-                        if (seenFiles.find(fullPath) == seenFiles.end()) {
-                            seenFiles.insert(fullPath);
-                            allFiles.push_back(fullPath);
-                        }
-                    }
-                }
-            }
-            
-            std::sort(allFiles.begin(), allFiles.end());
-            return allFiles;
-        };
-
         if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
             std::lock_guard<std::mutex> lock(m_Mutex);
-            return fn();
+            return ListAllFilesST();
         } else {
-            return fn();
+            return ListAllFilesST();
         }
     }
 
 private:
-    inline const TFileSystemList& GetFilesystemsST(std::string alias)
+    std::vector<std::string> ListAllFilesST() const
+    {
+        std::vector<std::string> allFiles;
+        std::unordered_set<std::string> seenFiles;
+
+        for (const std::string& alias : m_SortedAlias) {
+            const TFileSystemList& filesystems = GetFilesystemsST(alias);
+            if (filesystems.empty()) {
+                continue;
+            }
+
+            // Enumerate reverse to give priority to later registered filesystems
+            for (auto it = filesystems.rbegin(); it != filesystems.rend(); ++it) {
+                IFileSystemPtr fs = *it;
+                if (!fs || !fs->IsInitialized()) {
+                    continue;
+                }
+
+                const IFileSystem::TFileList& fileList = fs->FileList();
+
+                for (const auto& [relativePath, filePtr] : fileList) {
+                    if (!filePtr || filePtr->GetFileInfo().IsDir()) {
+                        continue;
+                    }
+
+                    std::string fullPath;
+                    fullPath.reserve(alias.size() + relativePath.size() + 1);
+                    fullPath.append(alias);
+                    if (!relativePath.empty()) {
+                        if (relativePath.front() == '/') {
+                            fullPath.append(relativePath.c_str() + 1); // skip leading slash
+                        } else {
+                            fullPath.append(relativePath);
+                        }
+                    }
+
+                    // Only add if not seen before (priority to later filesystems)
+                    if (seenFiles.emplace(fullPath).second) {
+                        allFiles.push_back(std::move(fullPath));
+                    }
+                }
+            }
+        }
+
+        std::sort(allFiles.begin(), allFiles.end());
+        return allFiles;
+    }
+
+    inline const TFileSystemList& GetFilesystemsST(std::string alias) const
     {
         if (!StringUtils::EndsWith(alias, "/")) {
             alias += "/";
