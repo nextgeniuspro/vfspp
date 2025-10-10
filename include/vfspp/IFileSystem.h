@@ -75,7 +75,7 @@ public:
     /*
      * Rename existing file on writable filesystem (Move file)
      */
-    virtual bool RenameFile(const FileInfo& src, const FileInfo& dest, bool overwrite = false) = 0;
+    virtual bool RenameFile(const FileInfo& src, const FileInfo& dest) = 0;
     
     /*
      * Check if file exists on filesystem

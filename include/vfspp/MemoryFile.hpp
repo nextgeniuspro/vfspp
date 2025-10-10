@@ -3,22 +3,11 @@
 
 #include "IFile.h"
 
-#include <algorithm>
-#include <atomic>
-#include <cstring>
-#include <limits>
-#include <memory>
-#include <span>
-#include <vector>
-
-
 namespace vfspp
 {
 
-class MemoryFileObject;
-
-using MemoryFileObjectPtr = std::shared_ptr<MemoryFileObject>;
-using MemoryFileObjectWeakPtr = std::weak_ptr<MemoryFileObject>;
+using MemoryFileObjectPtr = std::shared_ptr<class MemoryFileObject>;
+using MemoryFileObjectWeakPtr = std::weak_ptr<class MemoryFileObject>;
 using MemoryFilePtr = std::shared_ptr<class MemoryFile>;
 using MemoryFileWeakPtr = std::weak_ptr<class MemoryFile>;
 
@@ -45,7 +34,7 @@ public:
         auto old = std::atomic_load(&m_Data);
 
         if (!old || old.use_count() == 1) {
-            return old; // already unique or null
+            return old;
         }
 
         // Copy when shared with someone else
@@ -61,6 +50,7 @@ public:
 private:
     DataPtr m_Data;
 };
+
 
 class MemoryFile final : public IFile
 {
@@ -418,12 +408,12 @@ private:
     inline uint64_t ReadST(std::vector<uint8_t>& buffer, uint64_t size)
     {
         buffer.resize(size);
-    return ReadST(std::span<uint8_t>(buffer.data(), buffer.size()));
+        return ReadST(std::span<uint8_t>(buffer.data(), buffer.size()));
     }
     
     inline uint64_t WriteST(const std::vector<uint8_t>& buffer)
     {
-    return WriteST(std::span<const uint8_t>(buffer.data(), buffer.size()));
+        return WriteST(std::span<const uint8_t>(buffer.data(), buffer.size()));
     }
     
 private:

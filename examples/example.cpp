@@ -1,6 +1,5 @@
 #include "vfspp/VFS.h"
 
-#include <span>
 
 using namespace vfspp;
 using namespace std::string_view_literals;
@@ -8,27 +7,26 @@ using namespace std::string_view_literals;
 void PrintFile(const std::string& msg, IFilePtr file)
 {
     if (file && file->IsOpened()) {
-        char data[256];
-        memset(data, 0, sizeof(data));
-        file->Read(std::span<uint8_t>(reinterpret_cast<uint8_t*>(data), sizeof(data)));
+        std::string data(256, 0);
+        file->Read(std::span<uint8_t>(reinterpret_cast<uint8_t*>(data.data()), data.size()));
         
-        printf("%s\n%s\n", msg.c_str(), data);
+        printf("%s\n%s\n", msg.c_str(), data.c_str());
     }
 }
 
 int main()
 {
-	VirtualFileSystemPtr vfs(new VirtualFileSystem());
+	VirtualFileSystemPtr vfs = std::make_shared<VirtualFileSystem>();
     // Paths now relative to working directory where executable resides with copied test-data
-    // IFileSystemPtr rootFS(new NativeFileSystem("test-data/files"));
-    IFileSystemPtr memFS(new MemoryFileSystem());
-    // IFileSystemPtr zipFS(new ZipFileSystem("test-data/test.zip"));
+    IFileSystemPtr rootFS = std::make_shared<NativeFileSystem>("test-data/files");
+    IFileSystemPtr memFS = std::make_shared<MemoryFileSystem>();
+    // IFileSystemPtr zipFS = std::make_shared<ZipFileSystem>("test-data/test.zip");
 
-    // rootFS->Initialize();
+    rootFS->Initialize();
     memFS->Initialize();
     // zipFS->Initialize();
 
-    // vfs->AddFileSystem("/", rootFS);
+    vfs->AddFileSystem("/", rootFS);
     vfs->AddFileSystem("/memory", memFS);
     // vfs->AddFileSystem("/zip", zipFS);
 
@@ -68,39 +66,31 @@ int main()
 
     // printf("DLC filesystem test:\n");
     
-    // IFileSystemPtr dlc1FS(new NativeFileSystem("test-data/dlc1"));
-    // IFileSystemPtr dlc2FS(new NativeFileSystem("test-data/dlc2"));
+    IFileSystemPtr dlc1FS(new NativeFileSystem("test-data/dlc1"));
+    IFileSystemPtr dlc2FS(new NativeFileSystem("test-data/dlc2"));
 
-    // dlc1FS->Initialize();
-    // dlc2FS->Initialize();
+    dlc1FS->Initialize();
+    dlc2FS->Initialize();
 
-    // vfs->AddFileSystem("/dlc", dlc1FS);
+    vfs->AddFileSystem("/dlc", dlc1FS);
        
-    // IFilePtr dlcFile = vfs->OpenFile(FileInfo("/dlc/file.txt"), IFile::FileMode::Read);
-    // if (dlcFile && dlcFile->IsOpened()) {
-    //     PrintFile("File /dlc/file.txt that exists in dlc1:", dlcFile);
-    //     dlcFile->Close();
-    // }
+    if (IFilePtr dlcFile = vfs->OpenFile(FileInfo("/dlc/file.txt"), IFile::FileMode::Read)) {
+        PrintFile("File /dlc/file.txt that exists in dlc1:", dlcFile);
+    }
     
-    // vfs->AddFileSystem("/dlc", dlc2FS);
+    vfs->AddFileSystem("/dlc", dlc2FS);
 
-    // dlcFile = vfs->OpenFile(FileInfo("/dlc/file.txt"), IFile::FileMode::Read);
-    // if (dlcFile && dlcFile->IsOpened()) {
-    //     PrintFile("File /dlc/file.txt patched by dlc2:", dlcFile);
-    //     dlcFile->Close();
-    // }
+    if (IFilePtr dlcFile = vfs->OpenFile(FileInfo("/dlc/file.txt"), IFile::FileMode::Read)) {
+        PrintFile("File /dlc/file.txt patched by dlc2:", dlcFile);
+    }
 
-    // IFilePtr dlcFile1 = vfs->OpenFile(FileInfo("/dlc/file1.txt"), IFile::FileMode::Read);
-    // if (dlcFile1 && dlcFile1->IsOpened()) {
-    //     PrintFile("File /dlc/file1.txt that exists only in dlc1:", dlcFile1);
-    //     dlcFile1->Close();
-    // }
+    if (IFilePtr dlcFile = vfs->OpenFile(FileInfo("/dlc/file1.txt"), IFile::FileMode::Read)) {
+        PrintFile("File /dlc/file1.txt that exists only in dlc1:", dlcFile);
+    }
 
-    // IFilePtr dlcFile2 = vfs->OpenFile(FileInfo("/dlc/file2.txt"), IFile::FileMode::Read);
-    // if (dlcFile2 && dlcFile2->IsOpened()) {
-    //     PrintFile("File /dlc/file2.txt that exists only in dlc2:", dlcFile2);
-    //     dlcFile2->Close();
-    // }
+    if (IFilePtr dlcFile = vfs->OpenFile(FileInfo("/dlc/file2.txt"), IFile::FileMode::Read)) {
+        PrintFile("File /dlc/file2.txt that exists only in dlc2:", dlcFile);
+    }
 
 	return 0;
 }

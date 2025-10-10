@@ -168,13 +168,13 @@ public:
     /*
      * Rename existing file on writable filesystem
      */
-    virtual bool RenameFile(const FileInfo& srcPath, const FileInfo& dstPath, bool overwrite = false) override
+    virtual bool RenameFile(const FileInfo& srcPath, const FileInfo& dstPath) override
     {
         if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
             std::lock_guard<std::mutex> lock(m_Mutex);
-            return RenameFileST(srcPath, dstPath, overwrite);
+            return RenameFileST(srcPath, dstPath);
         } else {
-            return RenameFileST(srcPath, dstPath, overwrite);
+            return RenameFileST(srcPath, dstPath);
         }
     }
 
@@ -273,7 +273,7 @@ private:
         }
 
         MemoryFilePtr file = std::make_shared<MemoryFile>(entry.Info, entry.Object);
-        if (!file->Open(mode)) {
+        if (!file || !file->Open(mode)) {
             return nullptr;
         }
 
@@ -313,14 +313,14 @@ private:
         return true;
     }
 
-    inline bool CopyFileST(const FileInfo& src, const FileInfo& dest, bool overwrite = false)
+    inline bool CopyFileST(const FileInfo& srcPath, const FileInfo& dstPath, bool overwrite = false)
     {
-        auto srcIt = m_Files.find(src.AbsolutePath());
+        const auto srcIt = m_Files.find(srcPath.AbsolutePath());
         if (srcIt == m_Files.end()) {
             return false;
         }
 
-        auto destIt = m_Files.find(dest.AbsolutePath());
+        const auto destIt = m_Files.find(dstPath.AbsolutePath());
 
         // Destination file exists and overwrite is false
         if (destIt != m_Files.end() && !overwrite) {
@@ -331,23 +331,23 @@ private:
         if (destIt != m_Files.end() && overwrite) {
             m_Files.erase(destIt);
             m_FileList.erase(std::remove_if(m_FileList.begin(), m_FileList.end(), [&](const FileInfo& f) {
-                return f.AbsolutePath() == dest.AbsolutePath();
+                return f.AbsolutePath() == dstPath.AbsolutePath();
             }), m_FileList.end());
         }
 
-    MemoryFileObjectPtr newObject = std::make_shared<MemoryFileObject>();
-//        newObject->Update(std::make_shared<std::vector<uint8_t>>(*srcIt->second.Object->GetSnapshot()));
-    auto [destEntryIt, inserted] = m_Files.insert_or_assign(dest.AbsolutePath(), MemoryFileSystem::FileEntry(dest, newObject));
-    if (inserted) {
-        m_FileList.push_back(dest);
-    }
+        MemoryFileObjectPtr newObject = std::make_shared<MemoryFileObject>();
+    //        newObject->Update(std::make_shared<std::vector<uint8_t>>(*srcIt->second.Object->GetSnapshot())); // TODO: fix copy
+        const auto [destEntryIt, inserted] = m_Files.insert_or_assign(dstPath.AbsolutePath(), MemoryFileSystem::FileEntry(dstPath, newObject));
+        if (inserted) {
+            m_FileList.push_back(dstPath);
+        }
 
         return true;
     }
 
-    inline bool RenameFileST(const FileInfo& srcPath, const FileInfo& dstPath, bool overwrite = false)
+    inline bool RenameFileST(const FileInfo& srcPath, const FileInfo& dstPath)
     {
-        bool result = CopyFileST(srcPath, dstPath, overwrite);
+        bool result = CopyFileST(srcPath, dstPath, false);
         if (result)  {
             result = RemoveFileST(srcPath);
         }
@@ -363,9 +363,9 @@ private:
     inline void CloseFileAndCleanupOpenedHandles(IFilePtr fileToClose = nullptr)
     {
         if (fileToClose) {
-            auto absolutePath = fileToClose->GetFileInfo().AbsolutePath();
+            const auto absolutePath = fileToClose->GetFileInfo().AbsolutePath();
             
-            auto it = m_Files.find(absolutePath);
+            const auto it = m_Files.find(absolutePath);
             if (it == m_Files.end()) {
                 return;
             }
@@ -380,6 +380,7 @@ private:
     
 private:
     bool m_IsInitialized;
+    mutable std::mutex m_Mutex;
 
     struct FileEntry
     {
@@ -401,7 +402,6 @@ private:
         }
     };
 
-    mutable std::mutex m_Mutex;
     std::unordered_map<std::string, FileEntry> m_Files;
     std::vector<FileInfo> m_FileList;
 };
