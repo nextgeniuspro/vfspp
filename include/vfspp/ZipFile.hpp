@@ -1,8 +1,12 @@
+#if 0
+
 #ifndef ZIPFILE_HPP
 #define ZIPFILE_HPP
 
 #include "IFile.h"
 #include "zip_file.hpp"
+
+#include <span>
 
 namespace vfspp
 {
@@ -135,13 +139,13 @@ public:
     /*
      * Read data from file to buffer
      */
-    virtual uint64_t Read(uint8_t* buffer, uint64_t size) override
+    virtual uint64_t Read(std::span<uint8_t> buffer) override
     {
         if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
             std::lock_guard<std::mutex> lock(m_Mutex);
-            return ReadST(buffer, size);
+            return ReadST(buffer);
         } else {
-            return ReadST(buffer, size);
+            return ReadST(buffer);
         }
     }
     /*
@@ -151,9 +155,19 @@ public:
     {
         if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
             std::lock_guard<std::mutex> lock(m_Mutex);
-            return WriteST(buffer, size);
+            return WriteST(std::span<const uint8_t>(buffer, static_cast<std::size_t>(size)));
         } else {
-            return WriteST(buffer, size);
+            return WriteST(std::span<const uint8_t>(buffer, static_cast<std::size_t>(size)));
+        }
+    }
+
+    virtual uint64_t Write(std::span<const uint8_t> buffer) override
+    {
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return WriteST(buffer);
+        } else {
+            return WriteST(buffer);
         }
     }
 
@@ -295,16 +309,20 @@ private:
         return m_SeekPos;
     }
     
-    inline uint64_t ReadST(uint8_t* buffer, uint64_t size)
+    inline uint64_t ReadST(std::span<uint8_t> buffer)
     {
         if (!IsOpenedST()) {
             return 0;
         }
         
+        if (buffer.empty()) {
+            return 0;
+        }
+
         uint64_t leftSize = SizeST() - TellST();
-        uint64_t maxSize = std::min(size, leftSize);
+        uint64_t maxSize = std::min<uint64_t>(static_cast<uint64_t>(buffer.size()), leftSize);
         if (maxSize > 0) {
-            memcpy(buffer, m_Data.data() + m_SeekPos, static_cast<size_t>(maxSize));
+            memcpy(buffer.data(), m_Data.data() + m_SeekPos, static_cast<size_t>(maxSize));
             m_SeekPos += maxSize;
             return maxSize;
         }
@@ -312,7 +330,7 @@ private:
         return 0;
     }
     
-    inline uint64_t WriteST(const uint8_t* buffer, uint64_t size)
+    inline uint64_t WriteST(std::span<const uint8_t> buffer)
     {
         return 0;
     }
@@ -320,12 +338,12 @@ private:
     inline uint64_t ReadST(std::vector<uint8_t>& buffer, uint64_t size)
     {
         buffer.resize(size);
-        return ReadST(buffer.data(), size);
+        return ReadST(std::span<uint8_t>(buffer.data(), buffer.size()));
     }
     
     inline uint64_t WriteST(const std::vector<uint8_t>& buffer)
     {
-        return WriteST(buffer.data(), buffer.size());
+    return WriteST(std::span<const uint8_t>(buffer.data(), buffer.size()));
     }
     
     inline uint64_t ReadST(std::ostream& stream, uint64_t size, uint64_t bufferSize = 1024)
@@ -334,7 +352,8 @@ private:
         uint64_t totalSize = size;
         std::vector<uint8_t> buffer(bufferSize);
         while (size > 0) {
-            uint64_t bytesRead = ReadST(buffer.data(), std::min(size, static_cast<uint64_t>(buffer.size())));
+            const auto chunkSize = static_cast<std::size_t>(std::min(size, static_cast<uint64_t>(buffer.size())));
+            uint64_t bytesRead = ReadST(std::span<uint8_t>(buffer.data(), chunkSize));
 			if (bytesRead == 0) {
 				break;
 			}
@@ -367,7 +386,7 @@ private:
 				bytesRead = size;
 			}
 			
-			WriteST(buffer.data(), bytesRead);
+            WriteST(std::span<const uint8_t>(buffer.data(), static_cast<std::size_t>(bytesRead)));
 			
 			size -= bytesRead;
 		}
@@ -389,3 +408,5 @@ private:
 } // namespace vfspp
 
 #endif // ZIPFILE_HPP
+
+#endif // 0

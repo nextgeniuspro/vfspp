@@ -4,6 +4,8 @@
 #include "Global.h"
 #include "FileInfo.hpp"
 
+#include <span>
+
 namespace vfspp
 {
     
@@ -57,7 +59,7 @@ public:
     /*
      * Open file for reading/writing
      */
-    virtual void Open(FileMode mode) = 0;
+    virtual bool Open(FileMode mode) = 0;
     
     /*
      * Close file
@@ -82,35 +84,17 @@ public:
     /*
      * Read data from file to buffer
      */
-    virtual uint64_t Read(uint8_t* buffer, uint64_t size) = 0;
-
-    /*
-     * Write buffer data to file
-     */
-    virtual uint64_t Write(const uint8_t* buffer, uint64_t size) = 0;
-    
-    /*
-     * Templated alternative to Read
-     */
-    template<typename T>
-    bool Read(T& value)
-    {
-        return (Read(reinterpret_cast<uint8_t*>(&value), sizeof(value)));
-    }
-    
-    /*
-     * Templated alternative to Write
-     */
-    template<typename T>
-    uint64_t Write(const T& value)
-    {
-        return (Write(reinterpret_cast<const uint8_t*>(&value), sizeof(value)));
-    }
+    virtual uint64_t Read(std::span<uint8_t> buffer) = 0;
 
     /*
      * Read data from file to vector
      */
     virtual uint64_t Read(std::vector<uint8_t>& buffer, uint64_t size) = 0;
+
+    /*
+     * Write buffer data to file
+     */
+    virtual uint64_t Write(std::span<const uint8_t> buffer) = 0;
     
     /*
      * Write data from vector to file
@@ -118,14 +102,48 @@ public:
     virtual uint64_t Write(const std::vector<uint8_t>& buffer) = 0;
 
     /*
-     * Read data from file to stream
-     */
-    virtual uint64_t Read(std::ostream& stream, uint64_t size, uint64_t bufferSize = 1024) = 0;
-    
+    * Get current file mode
+    */
+    virtual FileMode GetMode() const = 0;
+
     /*
-     * Write data from stream to file
-     */
-    virtual uint64_t Write(std::istream& stream, uint64_t size, uint64_t bufferSize = 1024) = 0;
+    * Validate if mode is writeable
+    */
+    static bool IsModeWriteable(FileMode mode)
+    {
+        return ModeHasFlag(mode, FileMode::Write);
+    }
+
+    /*
+    * Validate if mode is correct
+    */
+    static bool IsModeValid(FileMode mode)
+    {
+        // Must have at least read or write flag
+        if (!ModeHasFlag(mode, FileMode::Read) && !ModeHasFlag(mode, FileMode::Write)) {
+            return false;
+        }
+
+        // Append mode requires write flag
+        if (ModeHasFlag(mode, FileMode::Append) && !ModeHasFlag(mode, FileMode::Write)) {
+            return false;
+        }
+
+        // Truncate mode requires write flag
+        if (ModeHasFlag(mode, FileMode::Truncate) && !ModeHasFlag(mode, FileMode::Write)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /*
+    * Helpers to check if mode has specific flag
+    */
+    static bool ModeHasFlag(FileMode mode, FileMode flag)
+    {
+        return (static_cast<uint8_t>(mode) & static_cast<uint8_t>(flag)) != 0;
+    }
 };
     
 inline bool operator==(IFilePtr f1, IFilePtr f2)

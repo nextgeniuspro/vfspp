@@ -11,6 +11,7 @@
 #include <sstream>
 #include <algorithm>
 #include <mutex>
+#include <shared_mutex>
 #include <memory>
 #include <utility>
 #include <math.h>
@@ -18,6 +19,11 @@
 #include <fstream>
 #include <iostream>
 #include <filesystem>
+#include <optional>
+#include <atomic>
+#include <cstring>
+#include <limits>
+#include <span>
 
 #ifdef VFSPP_ENABLE_MULTITHREADING
 #define VFSPP_MT_SUPPORT_ENABLED true

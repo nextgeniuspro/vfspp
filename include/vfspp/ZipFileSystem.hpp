@@ -1,3 +1,5 @@
+#if 0
+
 #ifndef ZIPFILESYSTEM_HPP
 #define ZIPFILESYSTEM_HPP
 
@@ -297,3 +299,5 @@ private:
 } // namespace vfspp
 
 #endif // ZIPFILESYSTEM_HPP
+
+#endif // 0

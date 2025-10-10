@@ -3,8 +3,10 @@
 
 #include "IFileSystem.h"
 #include "IFile.h"
+#include "Alias.hpp"
 #include <unordered_set>
 #include <algorithm>
+#include <optional>
 
 namespace vfspp
 {
@@ -17,7 +19,7 @@ class VirtualFileSystem final
 {
 public:
     typedef std::list<IFileSystemPtr> TFileSystemList;
-    typedef std::unordered_map<std::string, TFileSystemList> TFileSystemMap;
+    typedef std::unordered_map<Alias, TFileSystemList, Alias::Hash> TFileSystemMap;
     
 public:
     VirtualFileSystem()
@@ -39,26 +41,22 @@ public:
      * with alias '/', so it possible to access files with path '/filename'
      * instead of '/home/media/filename
      */
-    void AddFileSystem(std::string alias, IFileSystemPtr filesystem)
+    void AddFileSystem(const Alias& alias, IFileSystemPtr filesystem)
     {
         if (!filesystem) {
             return;
         }
 
-        if (!StringUtils::EndsWith(alias, "/")) {
-            alias += "/";
-        }
-        
-        std::function<void()> fn = [&]() {
+        auto fn = [this, alias, filesystem]() {
             m_FileSystems[alias].push_back(filesystem);
             if (std::find(m_SortedAlias.begin(), m_SortedAlias.end(), alias) == m_SortedAlias.end()) {
                 m_SortedAlias.push_back(alias);
             }
-            std::sort(m_SortedAlias.begin(), m_SortedAlias.end(), [](const std::string& a1, const std::string& a2) {
-                return a1.length() > a2.length();
+            std::sort(m_SortedAlias.begin(), m_SortedAlias.end(), [](const Alias& first, const Alias& second) {
+                return first.Length() > second.Length();
             });
         };
-        
+
         if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
             std::lock_guard<std::mutex> lock(m_Mutex);
             fn();
@@ -66,17 +64,18 @@ public:
             fn();
         }
     }
+
+    void AddFileSystem(std::string alias, IFileSystemPtr filesystem)
+    {
+        AddFileSystem(Alias(std::move(alias)), filesystem);
+    }
     
     /*
      * Remove registered filesystem
      */
-    void RemoveFileSystem(std::string alias, IFileSystemPtr filesystem)
+    void RemoveFileSystem(const Alias& alias, IFileSystemPtr filesystem)
     {
-        if (!StringUtils::EndsWith(alias, "/")) {
-            alias += "/";
-        }
-
-        std::function<void()> fn = [&]() {
+        auto fn = [this, alias, filesystem]() {
             auto it = m_FileSystems.find(alias);
             if (it != m_FileSystems.end()) {
                 it->second.remove(filesystem);
@@ -95,16 +94,17 @@ public:
         }
     }
 
+    void RemoveFileSystem(std::string alias, IFileSystemPtr filesystem)
+    {
+        RemoveFileSystem(Alias(std::move(alias)), filesystem);
+    }
+
     /*
      * Check if filesystem with 'alias' added
      */
-    bool HasFileSystem(std::string alias, IFileSystemPtr fileSystem) const
+    bool HasFileSystem(const Alias& alias, IFileSystemPtr fileSystem) const
     {
-        if (!StringUtils::EndsWith(alias, "/")) {
-            alias += "/";
-        }
-
-        std::function<bool()> fn = [&]() -> bool {
+        auto fn = [this, alias, fileSystem]() -> bool {
             auto it = m_FileSystems.find(alias);
             if (it != m_FileSystems.end()) {
                 return (std::find(it->second.begin(), it->second.end(), fileSystem) != it->second.end());
@@ -120,16 +120,17 @@ public:
         }
     }
 
+    bool HasFileSystem(std::string alias, IFileSystemPtr fileSystem) const
+    {
+        return HasFileSystem(Alias(std::move(alias)), fileSystem);
+    }
+
     /*
      * Unregister all filesystems with 'alias'
      */
-    void UnregisterAlias(std::string alias)
+    void UnregisterAlias(const Alias& alias)
     {
-        if (!StringUtils::EndsWith(alias, "/")) {
-            alias += "/";
-        }
-
-        std::function<void()> fn = [&]() {
+        auto fn = [this, alias]() {
             m_FileSystems.erase(alias);
             m_SortedAlias.erase(std::remove(m_SortedAlias.begin(), m_SortedAlias.end(), alias), m_SortedAlias.end());
         };
@@ -141,28 +142,34 @@ public:
             fn();
         }
     }
+
+    void UnregisterAlias(std::string alias)
+    {
+        UnregisterAlias(Alias(std::move(alias)));
+    }
     
     /*
      * Check if there any filesystem with 'alias' registered
      */
-    bool IsAliasRegistered(std::string alias) const
+    bool IsAliasRegistered(const Alias& alias) const
     {
-        if (!StringUtils::EndsWith(alias, "/")) {
-            alias += "/";
-        }
-
         if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
             std::lock_guard<std::mutex> lock(m_Mutex);
             return (m_FileSystems.find(alias) != m_FileSystems.end());
         } else {
             return (m_FileSystems.find(alias) != m_FileSystems.end());
         }
+    }
+
+    bool IsAliasRegistered(std::string alias) const
+    {
+        return IsAliasRegistered(Alias(std::move(alias)));
     }
     
     /*
      * Get all added filesystems with 'alias'
      */
-    const TFileSystemList& GetFilesystems(std::string alias)
+    const TFileSystemList& GetFilesystems(const Alias& alias)
     {
         if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
             std::lock_guard<std::mutex> lock(m_Mutex);
@@ -171,44 +178,70 @@ public:
             return GetFilesystemsST(alias);
         }
     }
+
+    const TFileSystemList& GetFilesystems(std::string alias)
+    {
+        return GetFilesystems(Alias(std::move(alias)));
+    }
+
+private:
+    template<typename Callback>
+    auto VisitMountedFileSystems(const std::string& absolutePath, Callback&& callback) const
+    {
+        using CallbackResult = decltype(callback(std::declval<IFileSystemPtr>(), std::declval<const std::string&>(), std::declval<bool>()));
+
+        for (const Alias& alias : m_SortedAlias) {
+            const std::string& aliasString = alias.String();
+            if (!StringUtils::StartsWith(absolutePath, aliasString)) {
+                continue;
+            }
+
+            std::string relativePath = absolutePath.substr(alias.Length());
+
+            const TFileSystemList& filesystems = GetFilesystemsST(alias);
+            if (filesystems.empty()) {
+                continue;
+            }
+
+            for (auto it = filesystems.rbegin(); it != filesystems.rend(); ++it) {
+                IFileSystemPtr fs = *it;
+                bool isMain = (fs == filesystems.front());
+
+                CallbackResult result = callback(fs, relativePath, isMain);
+                if (result) {
+                    return result;
+                }
+            }
+        }
+
+        return CallbackResult{};
+    }
+
+public:
     
     /*
      * Iterate over all registered filesystems and find first ocurrences of file
      */
     IFilePtr OpenFile(const FileInfo& filePath, IFile::FileMode mode)
     {
-        std::function<IFilePtr()> fn = [&]() -> IFilePtr {
-            for (const std::string& alias : m_SortedAlias) {
-                if (!StringUtils::StartsWith(filePath.AbsolutePath(), alias)) {
-                    continue;
-                }
+        auto fn = [this, &filePath, mode]() -> IFilePtr {
+            const std::string absolutePath = filePath.AbsolutePath();
 
-                // Strip alias from file path
-                std::string relativePath = filePath.AbsolutePath().substr(alias.length());
-                
-                // Enumerate reverse to get filesystems in order of registration
-                const TFileSystemList& filesystems = GetFilesystemsST(alias);
-                if (filesystems.empty()) {
-                    continue;
-                }
-                
-                for (auto it = filesystems.rbegin(); it != filesystems.rend(); ++it) {
-                    // Is it last filesystem
-                    IFileSystemPtr fs = *it;
-                    bool isMain = (fs == filesystems.front());
-
-                    // If file exists in filesystem we try to open it. 
-                    // In case file not exists and we are in first filesystem we try to create new file if mode allows it
-                    FileInfo realPath(fs->BasePath(), relativePath, false);
-                    if (fs->IsFileExists(realPath) || isMain) {
-                        IFilePtr file = fs->OpenFile(realPath, mode);
-                        if (file) {
-                            return file;
-                        }
+            auto result = VisitMountedFileSystems(absolutePath, [&](IFileSystemPtr fs, const std::string& relativePath, bool isMain) -> std::optional<IFilePtr> {
+                FileInfo realPath(fs->BasePath(), relativePath, false);
+                if (fs->IsFileExists(realPath) || isMain) {
+                    IFilePtr file = fs->OpenFile(realPath, mode);
+                    if (file) {
+                        return file;
                     }
                 }
+                return std::nullopt;
+            });
+
+            if (result) {
+                return result.value();
             }
-            
+
             return nullptr;
         };
 
@@ -222,37 +255,22 @@ public:
 
     std::string AbsolutePath(std::string_view relativePath)
     {
-        std::function<std::string()> fn = [&]() -> std::string {
+        auto fn = [this, relativePath]() -> std::string {
             std::string strRelativePath = std::string(relativePath);
-            for (const std::string& alias : m_SortedAlias) {
-                if (!StringUtils::StartsWith(strRelativePath, alias)) {
-                    continue;
+
+            auto result = VisitMountedFileSystems(strRelativePath, [&](IFileSystemPtr fs, const std::string& strippedRelativePath, bool isMain) -> std::optional<std::string> {
+                FileInfo realPath(fs->BasePath(), strippedRelativePath, false);
+                if (fs->IsFileExists(realPath) || isMain) {
+                    return realPath.AbsolutePath();
                 }
+                return std::nullopt;
+            });
 
-                // Strip alias from file path
-                std::string strippedRelativePath = strRelativePath.substr(alias.length());
-
-                // Enumerate reverse to get filesystems in order of registration
-                const TFileSystemList& filesystems = GetFilesystemsST(alias);
-                if (filesystems.empty()) {
-                    continue;
-                }
-
-                for (auto it = filesystems.rbegin(); it != filesystems.rend(); ++it) {
-                    // Is it last filesystem
-                    IFileSystemPtr fs = *it;
-                    bool isMain = (fs == filesystems.front());
-
-                    // If file exists in filesystem we try to open it. 
-                    // In case file not exists and we are in first filesystem we try to create new file if mode allows it
-                    FileInfo realPath(fs->BasePath(), strippedRelativePath, false);
-                    if (fs->IsFileExists(realPath) || isMain) {
-                        return realPath.AbsolutePath();
-                    }
-                }
+            if (result) {
+                return result.value();
             }
 
-            return "";
+            return std::string();
         };
 
         if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
@@ -269,32 +287,18 @@ public:
      */
     bool IsFileExists(std::string_view relativePath) const
     {
-        std::function<bool()> fn = [&]() -> bool {
+        auto fn = [this, relativePath]() -> bool {
             std::string strRelativePath = std::string(relativePath);
-            for (const std::string& alias : m_SortedAlias) {
-                if (!StringUtils::StartsWith(strRelativePath, alias)) {
-                    continue;
+
+            auto result = VisitMountedFileSystems(strRelativePath, [&](IFileSystemPtr fs, const std::string& strippedRelativePath, bool /*isMain*/) -> std::optional<bool> {
+                FileInfo realPath(fs->BasePath(), strippedRelativePath, false);
+                if (fs->IsFileExists(realPath)) {
+                    return true;
                 }
+                return std::nullopt;
+            });
 
-                // Strip alias from file path
-                std::string strippedRelativePath = strRelativePath.substr(alias.length());
-
-                // Enumerate reverse to get filesystems in order of registration
-                const TFileSystemList& filesystems = GetFilesystemsST(alias);
-                if (filesystems.empty()) {
-                    continue;
-                }
-
-                for (auto it = filesystems.rbegin(); it != filesystems.rend(); ++it) {
-                    IFileSystemPtr fs = *it;
-                    FileInfo realPath(fs->BasePath(), strippedRelativePath, false);
-                    if (fs->IsFileExists(realPath)) {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
+            return result.value_or(false);
         };
 
         if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
@@ -311,71 +315,68 @@ public:
      * Returns a vector of all file paths with their aliases
      * Files from later registered filesystems override earlier ones
      */
-    std::vector<std::string> ListAllFiles() const
-    {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return ListAllFilesST();
-        } else {
-            return ListAllFilesST();
-        }
-    }
+//    std::vector<std::string> ListAllFiles() const
+//    {
+//        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+//            std::lock_guard<std::mutex> lock(m_Mutex);
+//            return ListAllFilesST();
+//        } else {
+//            return ListAllFilesST();
+//        }
+//    }
 
 private:
-    std::vector<std::string> ListAllFilesST() const
+//    std::vector<std::string> ListAllFilesST() const
+//    {
+//        std::vector<std::string> allFiles;
+//        std::unordered_set<std::string> seenFiles;
+//
+//        for (const Alias& alias : m_SortedAlias) {
+//            const std::string& aliasString = alias.String();
+//            const TFileSystemList& filesystems = GetFilesystemsST(alias);
+//            if (filesystems.empty()) {
+//                continue;
+//            }
+//
+//            // Enumerate reverse to give priority to later registered filesystems
+//            for (auto it = filesystems.rbegin(); it != filesystems.rend(); ++it) {
+//                IFileSystemPtr fs = *it;
+//                if (!fs || !fs->IsInitialized()) {
+//                    continue;
+//                }
+//
+//                const IFileSystem::TFileList& fileList = fs->FileList();
+//
+//                for (const auto& [relativePath, filePtr] : fileList) {
+//                    if (!filePtr || filePtr->GetFileInfo().IsDir()) {
+//                        continue;
+//                    }
+//
+//                    std::string fullPath;
+//                    fullPath.reserve(aliasString.size() + relativePath.size() + 1);
+//                    fullPath.append(aliasString);
+//                    if (!relativePath.empty()) {
+//                        if (relativePath.front() == '/') {
+//                            fullPath.append(relativePath.c_str() + 1); // skip leading slash
+//                        } else {
+//                            fullPath.append(relativePath);
+//                        }
+//                    }
+//
+//                    // Only add if not seen before (priority to later filesystems)
+//                    if (seenFiles.emplace(fullPath).second) {
+//                        allFiles.push_back(std::move(fullPath));
+//                    }
+//                }
+//            }
+//        }
+//
+//        std::sort(allFiles.begin(), allFiles.end());
+//        return allFiles;
+//    }
+
+    inline const TFileSystemList& GetFilesystemsST(const Alias& alias) const
     {
-        std::vector<std::string> allFiles;
-        std::unordered_set<std::string> seenFiles;
-
-        for (const std::string& alias : m_SortedAlias) {
-            const TFileSystemList& filesystems = GetFilesystemsST(alias);
-            if (filesystems.empty()) {
-                continue;
-            }
-
-            // Enumerate reverse to give priority to later registered filesystems
-            for (auto it = filesystems.rbegin(); it != filesystems.rend(); ++it) {
-                IFileSystemPtr fs = *it;
-                if (!fs || !fs->IsInitialized()) {
-                    continue;
-                }
-
-                const IFileSystem::TFileList& fileList = fs->FileList();
-
-                for (const auto& [relativePath, filePtr] : fileList) {
-                    if (!filePtr || filePtr->GetFileInfo().IsDir()) {
-                        continue;
-                    }
-
-                    std::string fullPath;
-                    fullPath.reserve(alias.size() + relativePath.size() + 1);
-                    fullPath.append(alias);
-                    if (!relativePath.empty()) {
-                        if (relativePath.front() == '/') {
-                            fullPath.append(relativePath.c_str() + 1); // skip leading slash
-                        } else {
-                            fullPath.append(relativePath);
-                        }
-                    }
-
-                    // Only add if not seen before (priority to later filesystems)
-                    if (seenFiles.emplace(fullPath).second) {
-                        allFiles.push_back(std::move(fullPath));
-                    }
-                }
-            }
-        }
-
-        std::sort(allFiles.begin(), allFiles.end());
-        return allFiles;
-    }
-
-    inline const TFileSystemList& GetFilesystemsST(std::string alias) const
-    {
-        if (!StringUtils::EndsWith(alias, "/")) {
-            alias += "/";
-        }
-
         auto it = m_FileSystems.find(alias);
         if (it != m_FileSystems.end()) {
             return it->second;
@@ -388,7 +389,7 @@ private:
     
 private:
     TFileSystemMap m_FileSystems;
-    std::vector<std::string> m_SortedAlias;
+    std::vector<Alias> m_SortedAlias;
     mutable std::mutex m_Mutex;
 };
     

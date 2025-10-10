@@ -12,7 +12,7 @@ using IFileSystemWeakPtr = std::weak_ptr<class IFileSystem>;
 class IFileSystem
 {
 public:
-    typedef std::unordered_map<std::string, IFilePtr> TFileList;
+    using FilesList = std::vector<FileInfo>;
     
 public:
     IFileSystem() = default;
@@ -40,7 +40,7 @@ public:
     /*
      * Retrieve file list according filter
      */
-    virtual const TFileList& FileList() const = 0;
+    virtual const FilesList& FileList() const = 0;
     
     /*
      * Check is readonly filesystem
@@ -70,12 +70,12 @@ public:
     /*
      * Copy existing file on writable filesystem
      */
-    virtual bool CopyFile(const FileInfo& src, const FileInfo& dest) = 0;
+    virtual bool CopyFile(const FileInfo& src, const FileInfo& dest, bool overwrite = false) = 0;
     
     /*
-     * Rename existing file on writable filesystem
+     * Rename existing file on writable filesystem (Move file)
      */
-    virtual bool RenameFile(const FileInfo& src, const FileInfo& dest) = 0;
+    virtual bool RenameFile(const FileInfo& src, const FileInfo& dest, bool overwrite = false) = 0;
     
     /*
      * Check if file exists on filesystem
@@ -93,31 +93,29 @@ public:
     virtual bool IsDir(const FileInfo& dirPath) const = 0;
 
 protected:
-    inline bool IsFile(const FileInfo& filePath, const TFileList& fileList) const
+    inline bool IsFile(const FileInfo& filePath, const FilesList& fileList) const
     {
-        IFilePtr file = FindFile(filePath, fileList);
-        if (file) {
-            return !file->GetFileInfo().IsDir();
+        auto fileInfo = FindFileInfo(filePath, fileList);
+        if (fileInfo) {
+            return !fileInfo.value().IsDir();
         }
         return false;
     }
     
-    inline bool IsDir(const FileInfo& dirPath, const TFileList& fileList) const
+    inline bool IsDir(const FileInfo& dirPath, const FilesList& fileList) const
     {
-        IFilePtr file = FindFile(dirPath, fileList);
-        if (file) {
-            return file->GetFileInfo().IsDir();
-        }
-        return false;
+        return !IsFile(dirPath, fileList);
     }
 
-    IFilePtr FindFile(const FileInfo& fileInfo, const TFileList& fileList) const
+    std::optional<FileInfo> FindFileInfo(const FileInfo& fileInfo, const FilesList& fileList) const
     {
-        auto it = fileList.find(fileInfo.AbsolutePath());
-        if (it == fileList.end()) {
-            return nullptr;
+        auto it = std::find_if(fileList.begin(), fileList.end(), [&fileInfo](const FileInfo& f) {
+            return (f.AbsolutePath() == fileInfo.AbsolutePath());
+        });
+        if (it != fileList.end()) {
+            return std::optional(*it);
         }
-        return it->second;
+        return std::nullopt;
     }
 };
 

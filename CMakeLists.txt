@@ -7,7 +7,7 @@ option(BUILD_EXAMPLES "Build examples" OFF)
 add_subdirectory(vendor/miniz-cpp EXCLUDE_FROM_ALL)
 
 # Set C++ standard
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -22,7 +22,7 @@ target_include_directories(vfspp
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/vendor/miniz-cpp>
 )
 
-target_compile_features(vfspp INTERFACE cxx_std_17)
+target_compile_features(vfspp INTERFACE cxx_std_20)
 
 if (BUILD_EXAMPLES)
 add_subdirectory(examples)

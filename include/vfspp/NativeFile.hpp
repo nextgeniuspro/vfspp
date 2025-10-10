@@ -1,7 +1,11 @@
+#if 0
+
 #ifndef NATIVEFILE_HPP
 #define NATIVEFILE_HPP
 
 #include "IFile.h"
+
+#include <span>
 
 namespace vfspp
 {
@@ -138,13 +142,13 @@ public:
     /*
      * Read data from file to buffer
      */
-    virtual uint64_t Read(uint8_t* buffer, uint64_t size) override
+    virtual uint64_t Read(std::span<uint8_t> buffer) override
     {
         if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
             std::lock_guard<std::mutex> lock(m_Mutex);
-            return ReadST(buffer, size);
+            return ReadST(buffer);
         } else {
-            return ReadST(buffer, size);
+            return ReadST(buffer);
         }
     }
     /*
@@ -154,9 +158,19 @@ public:
     {
         if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
             std::lock_guard<std::mutex> lock(m_Mutex);
-            return WriteST(buffer, size);
+            return WriteST(std::span<const uint8_t>(buffer, static_cast<std::size_t>(size)));
         } else {
-            return WriteST(buffer, size);
+            return WriteST(std::span<const uint8_t>(buffer, static_cast<std::size_t>(size)));
+        }
+    }
+
+    virtual uint64_t Write(std::span<const uint8_t> buffer) override
+    {
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return WriteST(buffer);
+        } else {
+            return WriteST(buffer);
         }
     }
 
@@ -189,7 +203,7 @@ public:
     /*
      * Read data from file to stream
      */
-    virtual uint64_t Read(std::ostream& stream, uint64_t size, uint64_t bufferSize = 1024) override
+            return ReadST(buffer);
     {
         if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
             std::lock_guard<std::mutex> lock(m_Mutex);
@@ -319,7 +333,7 @@ private:
         return 0;
     }
     
-    inline uint64_t ReadST(uint8_t* buffer, uint64_t size)
+    inline uint64_t ReadST(std::span<uint8_t> buffer)
     {
         if (!IsOpenedST()) {
             return 0;
@@ -330,10 +344,14 @@ private:
             return 0;
         }
                 
+        if (buffer.empty()) {
+            return 0;
+        }
+
         uint64_t leftSize = SizeST() - TellST();
-        uint64_t maxSize = std::min(size, leftSize);
+        uint64_t maxSize = std::min<uint64_t>(static_cast<uint64_t>(buffer.size()), leftSize);
         if (maxSize > 0) {
-            m_Stream.read(reinterpret_cast<char*>(buffer), maxSize);
+            m_Stream.read(reinterpret_cast<char*>(buffer.data()), maxSize);
             if (m_Stream.good() || m_Stream.eof()) {
                 return static_cast<uint64_t>(m_Stream.gcount());
             }
@@ -345,7 +363,7 @@ private:
         return 0;
     }
 
-    inline uint64_t WriteST(const uint8_t* buffer, uint64_t size)
+    inline uint64_t WriteST(std::span<const uint8_t> buffer)
     {
         if (!IsOpenedST() || IsReadOnlyST()) {
             return 0;
@@ -355,8 +373,13 @@ private:
         if ((m_Mode & FileMode::Write) != FileMode::Write) {
             return 0;
         }
-        
-        m_Stream.write(reinterpret_cast<const char*>(buffer), size);
+
+        if (buffer.empty()) {
+            return 0;
+        }
+
+        const auto size = static_cast<uint64_t>(buffer.size());
+        m_Stream.write(reinterpret_cast<const char*>(buffer.data()), size);
         if (m_Stream.good()) {
             return size;
         }
@@ -366,12 +389,12 @@ private:
     inline uint64_t ReadST(std::vector<uint8_t>& buffer, uint64_t size)
     {
         buffer.resize(size);
-        return ReadST(buffer.data(), size);
+        return ReadST(std::span<uint8_t>(buffer.data(), buffer.size()));
     }
     
     inline uint64_t WriteST(const std::vector<uint8_t>& buffer)
     {
-        return WriteST(buffer.data(), buffer.size());
+    return WriteST(std::span<const uint8_t>(buffer.data(), buffer.size()));
     }
     
     inline uint64_t ReadST(std::ostream& stream, uint64_t size, uint64_t bufferSize = 1024)
@@ -380,7 +403,8 @@ private:
         uint64_t totalSize = size;
         std::vector<uint8_t> buffer(bufferSize);
         while (size > 0) {
-            uint64_t bytesRead = ReadST(buffer.data(), std::min(size, static_cast<uint64_t>(buffer.size())));
+            const auto chunkSize = static_cast<std::size_t>(std::min(size, static_cast<uint64_t>(buffer.size())));
+            uint64_t bytesRead = ReadST(std::span<uint8_t>(buffer.data(), chunkSize));
 			if (bytesRead == 0) {
 				break;
 			}
@@ -413,7 +437,7 @@ private:
                 bytesRead = size;
             }
 
-            WriteST(buffer.data(), bytesRead);
+            WriteST(std::span<const uint8_t>(buffer.data(), static_cast<std::size_t>(bytesRead)));
 
             size -= bytesRead;
         }
@@ -432,3 +456,5 @@ private:
 } // namespace vfspp
 
 #endif // NATIVEFILE_HPP
+
+#endif // 0

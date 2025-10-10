@@ -1,3 +1,5 @@
+#if 0
+
 #ifndef NATIVEFILESYSTEM_HPP
 #define NATIVEFILESYSTEM_HPP
 
@@ -288,7 +290,7 @@ private:
 
         IFilePtr file = FindFile(filePath, m_FileList);
         bool isExists = (file != nullptr);
-        if (!isExists && !IsReadOnlyST()) {
+        if (requestWrite && !isExists && !IsReadOnlyST()) {
             mode = mode | IFile::FileMode::Truncate;
             file.reset(new NativeFile(filePath));
         }
@@ -388,3 +390,5 @@ private:
 } // namespace vfspp
 
 #endif // NATIVEFILESYSTEM_HPP
+
+#endif // 0

@@ -6,8 +6,6 @@
 #include "StringUtils.hpp"
 #include "MemoryFile.hpp"
 
-namespace fs = std::filesystem;
-
 namespace vfspp
 {
 
@@ -72,18 +70,13 @@ public:
      */
     virtual const std::string& BasePath() const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return BasePathST();
-        } else {
-            return BasePathST();
-        }
+        return BasePathST();
     }
     
     /*
      * Retrieve file list according filter
      */
-    virtual const TFileList& FileList() const override
+    virtual const FilesList& FileList() const override
     {
         if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
             std::lock_guard<std::mutex> lock(m_Mutex);
@@ -162,26 +155,26 @@ public:
     /*
      * Copy existing file on writable filesystem
      */
-    virtual bool CopyFile(const FileInfo& src, const FileInfo& dest) override
+    virtual bool CopyFile(const FileInfo& src, const FileInfo& dest, bool overwrite = false) override
     {
         if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
             std::lock_guard<std::mutex> lock(m_Mutex);
-            return CopyFileST(src, dest);
+            return CopyFileST(src, dest, overwrite);
         } else {
-            return CopyFileST(src, dest);
+            return CopyFileST(src, dest, overwrite);
         }
     }
     
     /*
      * Rename existing file on writable filesystem
      */
-    virtual bool RenameFile(const FileInfo& srcPath, const FileInfo& dstPath) override
+    virtual bool RenameFile(const FileInfo& srcPath, const FileInfo& dstPath, bool overwrite = false) override
     {
         if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
             std::lock_guard<std::mutex> lock(m_Mutex);
-            return RenameFileST(srcPath, dstPath);
+            return RenameFileST(srcPath, dstPath, overwrite);
         } else {
-            return RenameFileST(srcPath, dstPath);
+            return RenameFileST(srcPath, dstPath, overwrite);
         }
     }
 
@@ -235,11 +228,9 @@ private:
 
     inline void ShutdownST()
     {
-        // close all files
-        for (auto& file : m_FileList) {
-            file.second->Close();
-        }
+        m_Files.clear();
         m_FileList.clear();
+        
         m_IsInitialized = false;
     }
 
@@ -254,7 +245,7 @@ private:
         return basePath;
     }
 
-    inline const TFileList& FileListST() const
+    inline const FilesList& FileListST() const
     {
         return m_FileList;
     }
@@ -266,78 +257,97 @@ private:
 
     inline IFilePtr OpenFileST(const FileInfo& filePath, IFile::FileMode mode)
     {
-        IFilePtr file = FindFile(filePath, m_FileList);
-        bool isExists = (file != nullptr);
-        if (!isExists && !IsReadOnlyST()) {
-            file.reset(new MemoryFile(filePath));
+        auto absolutePath = filePath.AbsolutePath();
+        
+        auto [entryIt, inserted] = m_Files.try_emplace(absolutePath, filePath, std::make_shared<MemoryFileObject>());
+        if (inserted) {
+            m_FileList.push_back(filePath);
         }
 
-        if (file) {
-            file->Open(mode);
-            
-            if (!isExists && file->IsOpened()) {
-                m_FileList[filePath.AbsolutePath()] = file;
-            }
+        auto& entry = entryIt->second;
+        if (!entry.Object) {
+            entry.Object = std::make_shared<MemoryFileObject>();
         }
-        
+        if (!entry.Object) {
+            return nullptr;
+        }
+
+        MemoryFilePtr file = std::make_shared<MemoryFile>(entry.Info, entry.Object);
+        if (!file->Open(mode)) {
+            return nullptr;
+        }
+
+        entry.OpenedHandles.push_back(file);
+
         return file;
     }
 
     inline void CloseFileST(IFilePtr file)
     {
-        if (!file) {
-            return;
-        }
-
-        file->Close();
-        m_FileList.erase(file->GetFileInfo().AbsolutePath());
+        CloseFileAndCleanupOpenedHandles(file);
     }
 
     inline bool CreateFileST(const FileInfo& filePath)
     {
         IFilePtr file = OpenFileST(filePath, IFile::FileMode::Write | IFile::FileMode::Truncate);
-        if (file) {
-            file->Close();
-            return true;
-        }
-        
-        return false;
+        CloseFileAndCleanupOpenedHandles(file);
+        return file != nullptr;
     }
 
     inline bool RemoveFileST(const FileInfo& filePath)
     {
-        auto numRemoved = m_FileList.erase(filePath.AbsolutePath());
-        return numRemoved > 0;
-    }
-
-    inline bool CopyFileST(const FileInfo& src, const FileInfo& dest)
-    {
-        MemoryFilePtr srcFile = std::static_pointer_cast<MemoryFile>(FindFile(src, m_FileList));
-        MemoryFilePtr dstFile = std::static_pointer_cast<MemoryFile>(OpenFileST(dest, IFile::FileMode::Write | IFile::FileMode::Truncate));
+        auto absolutePath = filePath.AbsolutePath();
         
-        if (srcFile && dstFile) {
-            bool needClose = false;
-            if (!srcFile->IsOpened()) {
-                needClose = true;
-                srcFile->Open(IFile::FileMode::Read);
-            }
-
-            dstFile->m_Data.assign(srcFile->m_Data.begin(), srcFile->m_Data.end());
-            dstFile->Close();
-
-            if (needClose) {
-                srcFile->Close();
-            }
-
-            return true;
+        auto it = m_Files.find(absolutePath);
+        if (it == m_Files.end()) {
+            return false;
         }
 
-        return false;
+        CloseFileAndCleanupOpenedHandles();
+
+        m_Files.erase(it);
+        m_FileList.erase(std::remove_if(m_FileList.begin(), m_FileList.end(), [&](const FileInfo& f) {
+            return f.AbsolutePath() == absolutePath;
+        }), m_FileList.end());
+
+        return true;
     }
 
-    inline bool RenameFileST(const FileInfo& srcPath, const FileInfo& dstPath)
+    inline bool CopyFileST(const FileInfo& src, const FileInfo& dest, bool overwrite = false)
     {
-        bool result = CopyFileST(srcPath, dstPath);
+        auto srcIt = m_Files.find(src.AbsolutePath());
+        if (srcIt == m_Files.end()) {
+            return false;
+        }
+
+        auto destIt = m_Files.find(dest.AbsolutePath());
+
+        // Destination file exists and overwrite is false
+        if (destIt != m_Files.end() && !overwrite) {
+            return false;
+        }
+
+        // Remove existing destination file
+        if (destIt != m_Files.end() && overwrite) {
+            m_Files.erase(destIt);
+            m_FileList.erase(std::remove_if(m_FileList.begin(), m_FileList.end(), [&](const FileInfo& f) {
+                return f.AbsolutePath() == dest.AbsolutePath();
+            }), m_FileList.end());
+        }
+
+    MemoryFileObjectPtr newObject = std::make_shared<MemoryFileObject>();
+//        newObject->Update(std::make_shared<std::vector<uint8_t>>(*srcIt->second.Object->GetSnapshot()));
+    auto [destEntryIt, inserted] = m_Files.insert_or_assign(dest.AbsolutePath(), MemoryFileSystem::FileEntry(dest, newObject));
+    if (inserted) {
+        m_FileList.push_back(dest);
+    }
+
+        return true;
+    }
+
+    inline bool RenameFileST(const FileInfo& srcPath, const FileInfo& dstPath, bool overwrite = false)
+    {
+        bool result = CopyFileST(srcPath, dstPath, overwrite);
         if (result)  {
             result = RemoveFileST(srcPath);
         }
@@ -347,13 +357,53 @@ private:
 
     inline bool IsFileExistsST(const FileInfo& filePath) const
     {
-        return FindFile(filePath, m_FileList) != nullptr;
+        return m_Files.find(filePath.AbsolutePath()) != m_Files.end();
+    }
+
+    inline void CloseFileAndCleanupOpenedHandles(IFilePtr fileToClose = nullptr)
+    {
+        if (fileToClose) {
+            auto absolutePath = fileToClose->GetFileInfo().AbsolutePath();
+            
+            auto it = m_Files.find(absolutePath);
+            if (it == m_Files.end()) {
+                return;
+            }
+            
+            fileToClose->Close();
+        }
+
+        for (auto& [path, entry] : m_Files) {
+            entry.CleanupOpenedHandles(fileToClose);
+        }
     }
     
 private:
     bool m_IsInitialized;
-    TFileList m_FileList;
+
+    struct FileEntry
+    {
+        FileInfo Info;
+        MemoryFileObjectPtr Object;
+        std::vector<MemoryFileWeakPtr> OpenedHandles;
+
+        FileEntry(const FileInfo& info, MemoryFileObjectPtr object)
+            : Info(info)
+            , Object(object)
+        {
+        }
+
+        void CleanupOpenedHandles(IFilePtr fileToExclude = nullptr)
+        {
+            OpenedHandles.erase(std::remove_if(OpenedHandles.begin(), OpenedHandles.end(), [&](const MemoryFileWeakPtr& weak) {
+                return weak.expired() || weak.lock() == fileToExclude;
+            }), OpenedHandles.end());
+        }
+    };
+
     mutable std::mutex m_Mutex;
+    std::unordered_map<std::string, FileEntry> m_Files;
+    std::vector<FileInfo> m_FileList;
 };
 
 } // namespace vfspp
