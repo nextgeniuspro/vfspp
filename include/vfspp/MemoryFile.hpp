@@ -2,18 +2,35 @@
 #define MEMORYFILE_HPP
 
 #include "IFile.h"
+#include "ThreadingPolicy.hpp"
+
+#include <atomic>
 
 namespace vfspp
 {
 
-using MemoryFileObjectPtr = std::shared_ptr<class MemoryFileObject>;
-using MemoryFileObjectWeakPtr = std::weak_ptr<class MemoryFileObject>;
-using MemoryFilePtr = std::shared_ptr<class MemoryFile>;
-using MemoryFileWeakPtr = std::weak_ptr<class MemoryFile>;
+class MemoryFileObject;
+
+template <typename ThreadingPolicy>
+class MemoryFile;
+
+template <typename ThreadingPolicy>
+class MemoryFileSystem;
+
+using MemoryFileObjectPtr = std::shared_ptr<MemoryFileObject>;
+using MemoryFileObjectWeakPtr = std::weak_ptr<MemoryFileObject>;
+
+template <typename ThreadingPolicy>
+using MemoryFilePtr = std::shared_ptr<MemoryFile<ThreadingPolicy>>;
+
+template <typename ThreadingPolicy>
+using MemoryFileWeakPtr = std::weak_ptr<MemoryFile<ThreadingPolicy>>;
 
 class MemoryFileObject
 {
+    template <typename>
     friend class MemoryFile;
+    template <typename>
     friend class MemoryFileSystem;
 
     using DataPtr = std::shared_ptr<std::vector<uint8_t>>;
@@ -22,6 +39,19 @@ public:
     MemoryFileObject() 
         : m_Data(std::make_shared<std::vector<uint8_t>>())
     {
+    }
+
+    MemoryFileObject(const MemoryFileObject& other)
+    {
+        CopyFrom(other);
+    }
+
+    MemoryFileObject& operator=(const MemoryFileObject& other)
+    {
+        if (this != &other) {
+            CopyFrom(other);
+        }
+        return *this;
     }
 
     // Read access
@@ -47,13 +77,26 @@ public:
         std::atomic_store(&m_Data, std::make_shared<std::vector<uint8_t>>());
     }
 
+    void CopyFrom(const MemoryFileObject& other)
+    {
+        auto otherData = other.GetData();
+        if (!otherData) {
+            Reset();
+            return;
+        }
+
+        auto copy = std::make_shared<std::vector<uint8_t>>(*otherData);
+        std::atomic_store(&m_Data, std::move(copy));
+    }
+
 private:
     DataPtr m_Data;
 };
 
-
+template <typename ThreadingPolicy>
 class MemoryFile final : public IFile
 {
+    template <typename>
     friend class MemoryFileSystem;
 
 public:
@@ -79,12 +122,8 @@ public:
      */
     virtual const FileInfo& GetFileInfo() const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return GetFileInfoST();
-        } else {
-            return GetFileInfoST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return GetFileInfoST();
     }
     
     /*
@@ -92,12 +131,8 @@ public:
      */
     virtual uint64_t Size() override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return SizeST();
-        } else {
-            return SizeST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return SizeST();
     }
     
     /*
@@ -105,12 +140,8 @@ public:
      */
     virtual bool IsReadOnly() const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return IsReadOnlyST();
-        } else {
-            return IsReadOnlyST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return IsReadOnlyST();
     }
     
     /*
@@ -118,12 +149,8 @@ public:
      */
     virtual bool Open(FileMode mode) override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return OpenST(mode);
-        } else {
-            return OpenST(mode);
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return OpenST(mode);
     }
     
     /*
@@ -131,12 +158,8 @@ public:
      */
     virtual void Close() override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            CloseST();
-        } else {
-            CloseST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        CloseST();
     }
     
     /*
@@ -144,12 +167,8 @@ public:
      */
     virtual bool IsOpened() const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return IsOpenedST();
-        } else {
-            return IsOpenedST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return IsOpenedST();
     }
     
     /*
@@ -157,24 +176,16 @@ public:
      */
     virtual uint64_t Seek(uint64_t offset, Origin origin) override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return SeekST(offset, origin);
-        } else {
-            return SeekST(offset, origin);
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return SeekST(offset, origin);
     }
     /*
      * Returns offset in file
      */
     virtual uint64_t Tell() override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return TellST();
-        } else {
-            return TellST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return TellST();
     }
     
     /*
@@ -182,12 +193,8 @@ public:
      */
     virtual uint64_t Read(std::span<uint8_t> buffer) override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return ReadST(buffer);
-        } else {
-            return ReadST(buffer);
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return ReadST(buffer);
     }
 
     /*
@@ -195,12 +202,8 @@ public:
      */
     virtual uint64_t Read(std::vector<uint8_t>& buffer, uint64_t size) override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return ReadST(buffer, size);
-        } else {
-            return ReadST(buffer, size);
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return ReadST(buffer, size);
     }
 
     /*
@@ -208,12 +211,8 @@ public:
      */
     virtual uint64_t Write(std::span<const uint8_t> buffer) override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return WriteST(buffer);
-        } else {
-            return WriteST(buffer);
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return WriteST(buffer);
     }
     
     /*
@@ -221,12 +220,8 @@ public:
      */
     virtual uint64_t Write(const std::vector<uint8_t>& buffer) override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return WriteST(buffer);
-        } else {
-            return WriteST(buffer);
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return WriteST(buffer);
     }
 
     /*
@@ -234,12 +229,8 @@ public:
     */
     virtual FileMode GetMode() const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return m_Mode;
-        } else {
-            return m_Mode;
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return m_Mode;
     }
 
 private:
@@ -424,7 +415,7 @@ private:
     FileMode m_Mode;
     mutable std::mutex m_StateMutex;
 };
-    
+
 } // namespace vfspp
 
 #endif // MEMORYFILE_HPP

@@ -3,6 +3,7 @@
 
 #include "IFileSystem.h"
 #include "Global.h"
+#include "ThreadingPolicy.hpp"
 #include "ZipFile.hpp"
 #include "zip_file.hpp"
 
@@ -11,10 +12,17 @@ namespace fs = std::filesystem;
 namespace vfspp
 {
 
-using ZipFileSystemPtr = std::shared_ptr<class ZipFileSystem>;
-using ZipFileSystemWeakPtr = std::weak_ptr<class ZipFileSystem>;
+template <typename ThreadingPolicy>
+class ZipFileSystem;
+
+template <typename ThreadingPolicy>
+using ZipFileSystemPtr = std::shared_ptr<ZipFileSystem<ThreadingPolicy>>;
+
+template <typename ThreadingPolicy>
+using ZipFileSystemWeakPtr = std::weak_ptr<ZipFileSystem<ThreadingPolicy>>;
 
 
+template <typename ThreadingPolicy>
 class ZipFileSystem final : public IFileSystem
 {
 public:
@@ -35,12 +43,8 @@ public:
      */
     virtual void Initialize() override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            InitializeST();
-        } else {
-            InitializeST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        InitializeST();
     }
 
     /*
@@ -48,12 +52,8 @@ public:
      */
     virtual void Shutdown() override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            ShutdownST();
-        } else {
-            ShutdownST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        ShutdownST();
     }
     
     /*
@@ -61,12 +61,8 @@ public:
      */
     virtual bool IsInitialized() const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return IsInitializedST();
-        } else {
-            return IsInitializedST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return IsInitializedST();
     }
     
     /*
@@ -74,12 +70,8 @@ public:
      */
     virtual const std::string& BasePath() const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return BasePathST();
-        } else {
-            return BasePathST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return BasePathST();
     }
     
     /*
@@ -87,12 +79,8 @@ public:
      */
     virtual const FilesList& FileList() const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return FileListST();
-        } else {
-            return FileListST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return FileListST();
     }
     
     /*
@@ -109,12 +97,8 @@ public:
      */
     virtual IFilePtr OpenFile(const FileInfo& filePath, IFile::FileMode mode) override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return OpenFileST(filePath, mode);
-        } else {
-            return OpenFileST(filePath, mode);
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return OpenFileST(filePath, mode);
     }
     
     /*
@@ -153,24 +137,16 @@ public:
     */
     virtual void CloseFile(IFilePtr file) override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            CloseFileST(file);
-        } else {
-            CloseFileST(file);
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        CloseFileST(file);
     }
     /*
      * Check if file exists on filesystem
      */
     virtual bool IsFileExists(const FileInfo& filePath) const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return IsFileExistsST(filePath);
-        } else {
-            return IsFileExistsST(filePath);
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return IsFileExistsST(filePath);
     }
 
     /*
@@ -178,12 +154,8 @@ public:
      */
     virtual bool IsFile(const FileInfo& filePath) const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return IFileSystem::IsFile(filePath, m_FileList);
-        } else {
-            return IFileSystem::IsFile(filePath, m_FileList);
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return IFileSystem::IsFile(filePath, m_FileList);
     }
     
     /*
@@ -191,19 +163,15 @@ public:
      */
     virtual bool IsDir(const FileInfo& dirPath) const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return IFileSystem::IsDir(dirPath, m_FileList);
-        } else {
-            return IFileSystem::IsDir(dirPath, m_FileList);
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return IFileSystem::IsDir(dirPath, m_FileList);
     }
 
 private:
     struct FileEntry
     {
         FileInfo Info;
-        std::vector<ZipFileWeakPtr> OpenedHandles;
+        std::vector<ZipFileWeakPtr<ThreadingPolicy>> OpenedHandles;
 
         uint32_t EntryID;
         uint64_t Size;
@@ -217,7 +185,7 @@ private:
 
         void CleanupOpenedHandles(IFilePtr fileToExclude = nullptr)
         {
-            OpenedHandles.erase(std::remove_if(OpenedHandles.begin(), OpenedHandles.end(), [&](const ZipFileWeakPtr& weak) {
+            OpenedHandles.erase(std::remove_if(OpenedHandles.begin(), OpenedHandles.end(), [&](const ZipFileWeakPtr<ThreadingPolicy>& weak) {
                 return weak.expired() || weak.lock() == fileToExclude;
             }), OpenedHandles.end());
         }
@@ -285,7 +253,7 @@ private:
         }
         auto& entry = entryIt->second;
 
-        ZipFilePtr file = std::make_shared<ZipFile>(entry.Info, entry.EntryID, entry.Size, m_ZipArchive);
+        ZipFilePtr<ThreadingPolicy> file = std::make_shared<ZipFile<ThreadingPolicy>>(entry.Info, entry.EntryID, entry.Size, m_ZipArchive);
         if (!file || !file->Open(mode)) {
             return nullptr;
         }
@@ -355,6 +323,14 @@ private:
     FilesList m_FileList;
     std::unordered_map<std::string, FileEntry> m_Files;
 };
+
+using MultiThreadedZipFileSystem = ZipFileSystem<MultiThreadedPolicy>;
+using MultiThreadedZipFileSystemPtr = ZipFileSystemPtr<MultiThreadedPolicy>;
+using MultiThreadedZipFileSystemWeakPtr = ZipFileSystemWeakPtr<MultiThreadedPolicy>;
+
+using SingleThreadedZipFileSystem = ZipFileSystem<SingleThreadedPolicy>;
+using SingleThreadedZipFileSystemPtr = ZipFileSystemPtr<SingleThreadedPolicy>;
+using SingleThreadedZipFileSystemWeakPtr = ZipFileSystemWeakPtr<SingleThreadedPolicy>;
 
 } // namespace vfspp
 

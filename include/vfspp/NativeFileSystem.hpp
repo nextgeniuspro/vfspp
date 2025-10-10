@@ -3,6 +3,7 @@
 
 #include "IFileSystem.h"
 #include "Global.h"
+#include "ThreadingPolicy.hpp"
 #include "NativeFile.hpp"
 
 namespace fs = std::filesystem;
@@ -10,9 +11,16 @@ namespace fs = std::filesystem;
 namespace vfspp
 {
 
-using NativeFileSystemPtr = std::shared_ptr<class NativeFileSystem>;
-using NativeFileSystemWeakPtr = std::weak_ptr<class NativeFileSystem>;
+template <typename ThreadingPolicy>
+class NativeFileSystem;
 
+template <typename ThreadingPolicy>
+using NativeFileSystemPtr = std::shared_ptr<NativeFileSystem<ThreadingPolicy>>;
+
+template <typename ThreadingPolicy>
+using NativeFileSystemWeakPtr = std::weak_ptr<NativeFileSystem<ThreadingPolicy>>;
+
+template <typename ThreadingPolicy>
 class NativeFileSystem final : public IFileSystem
 {
 public:
@@ -32,12 +40,8 @@ public:
      */
     virtual void Initialize() override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            InitializeST();
-        } else {
-            InitializeST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        InitializeST();
     }
 
     /*
@@ -45,12 +49,8 @@ public:
      */
     virtual void Shutdown() override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            ShutdownST();
-        } else {
-            ShutdownST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        ShutdownST();
     }
     
     /*
@@ -58,12 +58,8 @@ public:
      */
     virtual bool IsInitialized() const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return IsInitializedST();
-        } else {
-            return IsInitializedST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return IsInitializedST();
     }
     
     /*
@@ -71,12 +67,8 @@ public:
      */
     virtual const std::string& BasePath() const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return BasePathST();
-        } else {
-            return BasePathST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return BasePathST();
     }
     
     /*
@@ -84,12 +76,8 @@ public:
      */
     virtual const FilesList& FileList() const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return FileListST();
-        } else {
-            return FileListST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return FileListST();
     }
     
     /*
@@ -97,12 +85,8 @@ public:
      */
     virtual bool IsReadOnly() const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return IsReadOnlyST();
-        } else {
-            return IsReadOnlyST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return IsReadOnlyST();
     }
     
     /*
@@ -111,12 +95,8 @@ public:
      */
     virtual IFilePtr OpenFile(const FileInfo& filePath, IFile::FileMode mode) override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return OpenFileST(filePath, mode);
-        } else {
-            return OpenFileST(filePath, mode);
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return OpenFileST(filePath, mode);
     }
 
     /*
@@ -124,12 +104,8 @@ public:
      */
     virtual void CloseFile(IFilePtr file) override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            CloseFileST(file);
-        } else {
-            CloseFileST(file);
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        CloseFileST(file);
     }
     
     /*
@@ -137,12 +113,8 @@ public:
      */
     virtual bool CreateFile(const FileInfo& filePath) override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return CreateFileST(filePath);
-        } else {
-            return CreateFileST(filePath);
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return CreateFileST(filePath);
     }
     
     /*
@@ -150,12 +122,8 @@ public:
      */
     virtual bool RemoveFile(const FileInfo& filePath) override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return RemoveFileST(filePath);
-        } else {
-            return RemoveFileST(filePath);
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return RemoveFileST(filePath);
     }
     
     /*
@@ -163,12 +131,8 @@ public:
      */
     virtual bool CopyFile(const FileInfo& src, const FileInfo& dest, bool overwrite = false) override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return CopyFileST(src, dest, overwrite);
-        } else {
-            return CopyFileST(src, dest, overwrite);
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return CopyFileST(src, dest, overwrite);
     }
     
     /*
@@ -176,12 +140,8 @@ public:
      */
     virtual bool RenameFile(const FileInfo& srcPath, const FileInfo& dstPath) override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return RenameFileST(srcPath, dstPath);
-        } else {
-            return RenameFileST(srcPath, dstPath);
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return RenameFileST(srcPath, dstPath);
     }
 
     /*
@@ -189,12 +149,8 @@ public:
      */
     virtual bool IsFileExists(const FileInfo& filePath) const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return IsFileExistsST(filePath);
-        } else {
-            return IsFileExistsST(filePath);
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return IsFileExistsST(filePath);
     }
 
     /*
@@ -202,12 +158,8 @@ public:
      */
     virtual bool IsFile(const FileInfo& filePath) const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return IFileSystem::IsFile(filePath, m_FileList);
-        } else {
-            return IFileSystem::IsFile(filePath, m_FileList);
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return IFileSystem::IsFile(filePath, m_FileList);
     }
     
     /*
@@ -215,19 +167,15 @@ public:
      */
     virtual bool IsDir(const FileInfo& dirPath) const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return IFileSystem::IsDir(dirPath, m_FileList);
-        } else {
-            return IFileSystem::IsDir(dirPath, m_FileList);
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return IFileSystem::IsDir(dirPath, m_FileList);
     }
 
 private:
     struct FileEntry
     {
         FileInfo Info;
-        std::vector<NativeFileWeakPtr> OpenedHandles;
+        std::vector<NativeFileWeakPtr<ThreadingPolicy>> OpenedHandles;
 
         explicit FileEntry(const FileInfo& info)
             : Info(info)
@@ -236,7 +184,7 @@ private:
 
         void CleanupOpenedHandles(IFilePtr fileToExclude = nullptr)
         {
-            OpenedHandles.erase(std::remove_if(OpenedHandles.begin(), OpenedHandles.end(), [&](const NativeFileWeakPtr& weak) {
+            OpenedHandles.erase(std::remove_if(OpenedHandles.begin(), OpenedHandles.end(), [&](const NativeFileWeakPtr<ThreadingPolicy>& weak) {
                 return weak.expired() || weak.lock() == fileToExclude;
             }), OpenedHandles.end());
         }
@@ -313,7 +261,7 @@ private:
         }
         auto& entry = entryIt->second;
 
-        NativeFilePtr file = std::make_shared<NativeFile>(entry.Info);
+        NativeFilePtr<ThreadingPolicy> file = std::make_shared<NativeFile<ThreadingPolicy>>(entry.Info);
         if (!file || !file->Open(mode)) {
             return nullptr;
         }
@@ -385,7 +333,7 @@ private:
         }
 
         // Add new entry
-        const auto [destEntryIt, inserted] = m_Files.insert_or_assign(dstPath.AbsolutePath(), NativeFileSystem::FileEntry(dstPath));
+    const auto [destEntryIt, inserted] = m_Files.insert_or_assign(dstPath.AbsolutePath(), FileEntry(dstPath));
         if (inserted) {
             m_FileList.push_back(dstPath);
         }
@@ -428,7 +376,7 @@ private:
         }
 
         // Add new entry
-        const auto [destEntryIt, inserted] = m_Files.insert_or_assign(dstPath.AbsolutePath(), NativeFileSystem::FileEntry(dstPath));
+    const auto [destEntryIt, inserted] = m_Files.insert_or_assign(dstPath.AbsolutePath(), FileEntry(dstPath));
         if (inserted) {
             m_FileList.push_back(dstPath);
         }
@@ -481,6 +429,14 @@ private:
     std::unordered_map<std::string, FileEntry> m_Files;
     FilesList m_FileList;
 };
+
+using MultiThreadedNativeFileSystem = NativeFileSystem<MultiThreadedPolicy>;
+using MultiThreadedNativeFileSystemPtr = NativeFileSystemPtr<MultiThreadedPolicy>;
+using MultiThreadedNativeFileSystemWeakPtr = NativeFileSystemWeakPtr<MultiThreadedPolicy>;
+
+using SingleThreadedNativeFileSystem = NativeFileSystem<SingleThreadedPolicy>;
+using SingleThreadedNativeFileSystemPtr = NativeFileSystemPtr<SingleThreadedPolicy>;
+using SingleThreadedNativeFileSystemWeakPtr = NativeFileSystemWeakPtr<SingleThreadedPolicy>;
 
 } // namespace vfspp
 

@@ -4,17 +4,23 @@
 #include "IFileSystem.h"
 #include "IFile.h"
 #include "Alias.hpp"
-#include <unordered_set>
-#include <algorithm>
-#include <optional>
+#include "ThreadingPolicy.hpp"
+
 
 namespace vfspp
 {
 
-using VirtualFileSystemPtr = std::shared_ptr<class VirtualFileSystem>;
-using VirtualFileSystemWeakPtr = std::weak_ptr<class VirtualFileSystem>;
+template <typename ThreadingPolicy>
+class VirtualFileSystem;
+
+template <typename ThreadingPolicy>
+using VirtualFileSystemPtr = std::shared_ptr<VirtualFileSystem<ThreadingPolicy>>;
+
+template <typename ThreadingPolicy>
+using VirtualFileSystemWeakPtr = std::weak_ptr<VirtualFileSystem<ThreadingPolicy>>;
     
 
+template <typename ThreadingPolicy>
 class VirtualFileSystem final
 {
 public:
@@ -28,6 +34,7 @@ public:
 
     ~VirtualFileSystem()
     {
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
         for (const auto& fs : m_FileSystems) {
             for (const auto& f : fs.second) {
                 f->Shutdown();
@@ -47,27 +54,49 @@ public:
             return;
         }
 
-        auto fn = [this, alias, filesystem]() {
-            m_FileSystems[alias].push_back(filesystem);
-            if (std::find(m_SortedAlias.begin(), m_SortedAlias.end(), alias) == m_SortedAlias.end()) {
-                m_SortedAlias.push_back(alias);
-            }
-            std::sort(m_SortedAlias.begin(), m_SortedAlias.end(), [](const Alias& first, const Alias& second) {
-                return first.Length() > second.Length();
-            });
-        };
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
 
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            fn();
-        } else {
-            fn();
+        m_FileSystems[alias].push_back(filesystem);
+        if (std::find(m_SortedAlias.begin(), m_SortedAlias.end(), alias) == m_SortedAlias.end()) {
+            m_SortedAlias.push_back(alias);
         }
+        std::sort(m_SortedAlias.begin(), m_SortedAlias.end(), [](const Alias& first, const Alias& second) {
+            return first.Length() > second.Length();
+        });
     }
 
     void AddFileSystem(std::string alias, IFileSystemPtr filesystem)
     {
         AddFileSystem(Alias(std::move(alias)), filesystem);
+    }
+
+    template <template <typename> class FileSystemType, typename... Args>
+    [[nodiscard]] auto CreateFileSystem(const Alias& alias, Args&&... args)
+        -> std::optional<std::shared_ptr<FileSystemType<ThreadingPolicy>>>
+    {
+        using ConcreteFileSystem = FileSystemType<ThreadingPolicy>;
+        static_assert(std::is_base_of_v<IFileSystem, ConcreteFileSystem>,
+                      "FileSystemType must derive from IFileSystem");
+
+        auto filesystem = std::make_shared<ConcreteFileSystem>(std::forward<Args>(args)...);
+        if (!filesystem) {
+            return {};
+        }
+
+        filesystem->Initialize();
+        if (!filesystem->IsInitialized()) {
+            return {};
+        }
+
+        AddFileSystem(alias, filesystem);
+        return filesystem;
+    }
+
+    template <template <typename> class FileSystemType, typename... Args>
+    [[nodiscard]] auto CreateFileSystem(std::string alias, Args&&... args)
+        -> std::optional<std::shared_ptr<FileSystemType<ThreadingPolicy>>>
+    {
+        return CreateFileSystem<FileSystemType>(Alias(std::move(alias)), std::forward<Args>(args)...);
     }
     
     /*
@@ -75,22 +104,15 @@ public:
      */
     void RemoveFileSystem(const Alias& alias, IFileSystemPtr filesystem)
     {
-        auto fn = [this, alias, filesystem]() {
-            auto it = m_FileSystems.find(alias);
-            if (it != m_FileSystems.end()) {
-                it->second.remove(filesystem);
-                if (it->second.empty()) {
-                    m_FileSystems.erase(it);
-                    m_SortedAlias.erase(std::remove(m_SortedAlias.begin(), m_SortedAlias.end(), alias), m_SortedAlias.end());
-                }
-            }
-        };
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
 
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            fn();
-        } else {
-            fn();
+        auto it = m_FileSystems.find(alias);
+        if (it != m_FileSystems.end()) {
+            it->second.remove(filesystem);
+            if (it->second.empty()) {
+                m_FileSystems.erase(it);
+                m_SortedAlias.erase(std::remove(m_SortedAlias.begin(), m_SortedAlias.end(), alias), m_SortedAlias.end());
+            }
         }
     }
 
@@ -104,20 +126,12 @@ public:
      */
     bool HasFileSystem(const Alias& alias, IFileSystemPtr fileSystem) const
     {
-        auto fn = [this, alias, fileSystem]() -> bool {
-            auto it = m_FileSystems.find(alias);
-            if (it != m_FileSystems.end()) {
-                return (std::find(it->second.begin(), it->second.end(), fileSystem) != it->second.end());
-            }
-            return false;
-        };
-
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return fn();
-        } else {
-            return fn();
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        auto it = m_FileSystems.find(alias);
+        if (it != m_FileSystems.end()) {
+            return std::find(it->second.begin(), it->second.end(), fileSystem) != it->second.end();
         }
+        return false;
     }
 
     bool HasFileSystem(std::string alias, IFileSystemPtr fileSystem) const
@@ -130,17 +144,9 @@ public:
      */
     void UnregisterAlias(const Alias& alias)
     {
-        auto fn = [this, alias]() {
-            m_FileSystems.erase(alias);
-            m_SortedAlias.erase(std::remove(m_SortedAlias.begin(), m_SortedAlias.end(), alias), m_SortedAlias.end());
-        };
-
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            fn();
-        } else {
-            fn();
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        m_FileSystems.erase(alias);
+        m_SortedAlias.erase(std::remove(m_SortedAlias.begin(), m_SortedAlias.end(), alias), m_SortedAlias.end());
     }
 
     void UnregisterAlias(std::string alias)
@@ -153,12 +159,8 @@ public:
      */
     bool IsAliasRegistered(const Alias& alias) const
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return (m_FileSystems.find(alias) != m_FileSystems.end());
-        } else {
-            return (m_FileSystems.find(alias) != m_FileSystems.end());
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return m_FileSystems.find(alias) != m_FileSystems.end();
     }
 
     bool IsAliasRegistered(std::string alias) const
@@ -171,12 +173,8 @@ public:
      */
     const TFileSystemList& GetFilesystems(const Alias& alias)
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return GetFilesystemsST(alias);
-        } else {
-            return GetFilesystemsST(alias);
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return GetFilesystemsST(alias);
     }
 
     const TFileSystemList& GetFilesystems(std::string alias)
@@ -224,62 +222,47 @@ public:
      */
     IFilePtr OpenFile(const FileInfo& filePath, IFile::FileMode mode)
     {
-        auto fn = [this, &filePath, mode]() -> IFilePtr {
-            const std::string absolutePath = filePath.AbsolutePath();
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
 
-            auto result = VisitMountedFileSystems(absolutePath, [&](IFileSystemPtr fs, const std::string& relativePath, bool isMain) -> std::optional<IFilePtr> {
-                FileInfo realPath(fs->BasePath(), relativePath, false);
-                if (fs->IsFileExists(realPath) || isMain) {
-                    IFilePtr file = fs->OpenFile(realPath, mode);
-                    if (file) {
-                        return file;
-                    }
+        const std::string absolutePath = filePath.AbsolutePath();
+
+        auto result = VisitMountedFileSystems(absolutePath, [&](IFileSystemPtr fs, const std::string& relativePath, bool isMain) -> std::optional<IFilePtr> {
+            FileInfo realPath(fs->BasePath(), relativePath, false);
+            if (fs->IsFileExists(realPath) || isMain) {
+                IFilePtr file = fs->OpenFile(realPath, mode);
+                if (file) {
+                    return file;
                 }
-                return std::nullopt;
-            });
-
-            if (result) {
-                return result.value();
             }
+            return std::nullopt;
+        });
 
-            return nullptr;
-        };
-
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return fn();
-        } else {
-            return fn();
+        if (result) {
+            return result.value();
         }
+
+        return nullptr;
     }
 
     std::string AbsolutePath(std::string_view relativePath)
     {
-        auto fn = [this, relativePath]() -> std::string {
-            std::string strRelativePath = std::string(relativePath);
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
 
-            auto result = VisitMountedFileSystems(strRelativePath, [&](IFileSystemPtr fs, const std::string& strippedRelativePath, bool isMain) -> std::optional<std::string> {
-                FileInfo realPath(fs->BasePath(), strippedRelativePath, false);
-                if (fs->IsFileExists(realPath) || isMain) {
-                    return realPath.AbsolutePath();
-                }
-                return std::nullopt;
-            });
+        std::string strRelativePath(relativePath);
 
-            if (result) {
-                return result.value();
+        auto result = VisitMountedFileSystems(strRelativePath, [&](IFileSystemPtr fs, const std::string& strippedRelativePath, bool isMain) -> std::optional<std::string> {
+            FileInfo realPath(fs->BasePath(), strippedRelativePath, false);
+            if (fs->IsFileExists(realPath) || isMain) {
+                return realPath.AbsolutePath();
             }
+            return std::nullopt;
+        });
 
-            return std::string();
-        };
+        if (result) {
+            return result.value();
+        }
 
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return fn();
-        }
-        else {
-            return fn();
-        }
+        return std::string();
     }
     
     /*
@@ -287,27 +270,19 @@ public:
      */
     bool IsFileExists(std::string_view relativePath) const
     {
-        auto fn = [this, relativePath]() -> bool {
-            std::string strRelativePath = std::string(relativePath);
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
 
-            auto result = VisitMountedFileSystems(strRelativePath, [&](IFileSystemPtr fs, const std::string& strippedRelativePath, bool /*isMain*/) -> std::optional<bool> {
-                FileInfo realPath(fs->BasePath(), strippedRelativePath, false);
-                if (fs->IsFileExists(realPath)) {
-                    return true;
-                }
-                return std::nullopt;
-            });
+        std::string strRelativePath(relativePath);
 
-            return result.value_or(false);
-        };
+        auto result = VisitMountedFileSystems(strRelativePath, [&](IFileSystemPtr fs, const std::string& strippedRelativePath, bool /*isMain*/) -> std::optional<bool> {
+            FileInfo realPath(fs->BasePath(), strippedRelativePath, false);
+            if (fs->IsFileExists(realPath)) {
+                return true;
+            }
+            return std::nullopt;
+        });
 
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return fn();
-        }
-        else {
-            return fn();
-        }
+        return result.value_or(false);
     }
 
     /*
@@ -392,6 +367,15 @@ private:
     std::vector<Alias> m_SortedAlias;
     mutable std::mutex m_Mutex;
 };
+
+using MultiThreadedVirtualFileSystem = VirtualFileSystem<MultiThreadedPolicy>;
+using MultiThreadedVirtualFileSystemPtr = VirtualFileSystemPtr<MultiThreadedPolicy>;
+using MultiThreadedVirtualFileSystemWeakPtr = VirtualFileSystemWeakPtr<MultiThreadedPolicy>;
+
+using SingleThreadedVirtualFileSystem = VirtualFileSystem<SingleThreadedPolicy>;
+using SingleThreadedVirtualFileSystemPtr = VirtualFileSystemPtr<SingleThreadedPolicy>;
+using SingleThreadedVirtualFileSystemWeakPtr = VirtualFileSystemWeakPtr<SingleThreadedPolicy>;
+
     
 }; // namespace vfspp
 

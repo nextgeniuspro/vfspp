@@ -24,11 +24,7 @@
 #include <cstring>
 #include <limits>
 #include <span>
+#include <type_traits>
 
-#ifdef VFSPP_ENABLE_MULTITHREADING
-#define VFSPP_MT_SUPPORT_ENABLED true
-#else
-#define VFSPP_MT_SUPPORT_ENABLED false
-#endif
 
 #endif // GLOBAL_H

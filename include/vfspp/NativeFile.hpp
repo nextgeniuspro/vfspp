@@ -2,15 +2,23 @@
 #define NATIVEFILE_HPP
 
 #include "IFile.h"
+#include "ThreadingPolicy.hpp"
 
 namespace fs = std::filesystem;
 
 namespace vfspp
 {
 
-using NativeFilePtr = std::shared_ptr<class NativeFile>;
-using NativeFileWeakPtr = std::weak_ptr<class NativeFile>;
+template <typename ThreadingPolicy>
+class NativeFile;
 
+template <typename ThreadingPolicy>
+using NativeFilePtr = std::shared_ptr<NativeFile<ThreadingPolicy>>;
+
+template <typename ThreadingPolicy>
+using NativeFileWeakPtr = std::weak_ptr<NativeFile<ThreadingPolicy>>;
+
+template <typename ThreadingPolicy>
 class NativeFile final : public IFile
 {
 public:
@@ -37,12 +45,8 @@ public:
      */
     virtual const FileInfo& GetFileInfo() const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return GetFileInfoST();
-        } else {
-            return GetFileInfoST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return GetFileInfoST();
     }
     
     /*
@@ -50,12 +54,8 @@ public:
      */
     virtual uint64_t Size() override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return SizeST();
-        } else {
-            return SizeST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return SizeST();
     }
     
     /*
@@ -63,12 +63,8 @@ public:
      */
     virtual bool IsReadOnly() const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return IsReadOnlyST();
-        } else {
-            return IsReadOnlyST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return IsReadOnlyST();
     }
     
     /*
@@ -76,12 +72,8 @@ public:
      */
     virtual bool Open(FileMode mode) override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return OpenST(mode);
-        } else {
-            return OpenST(mode);
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return OpenST(mode);
     }
     
     /*
@@ -89,12 +81,8 @@ public:
      */
     virtual void Close() override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            CloseST();
-        } else {
-            CloseST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        CloseST();
     }
     
     /*
@@ -102,12 +90,8 @@ public:
      */
     virtual bool IsOpened() const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return IsOpenedST();
-        } else {
-            return IsOpenedST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return IsOpenedST();
     }
     
     /*
@@ -115,24 +99,16 @@ public:
      */
     virtual uint64_t Seek(uint64_t offset, Origin origin) override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return SeekST(offset, origin);
-        } else {
-            return SeekST(offset, origin);
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return SeekST(offset, origin);
     }
     /*
      * Returns offset in file
      */
     virtual uint64_t Tell() override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return TellST();
-        } else {
-            return TellST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return TellST();
     }
     
     /*
@@ -140,12 +116,8 @@ public:
      */
     virtual uint64_t Read(std::span<uint8_t> buffer) override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return ReadST(buffer);
-        } else {
-            return ReadST(buffer);
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return ReadST(buffer);
     }
 
     /*
@@ -153,12 +125,8 @@ public:
      */
     virtual uint64_t Read(std::vector<uint8_t>& buffer, uint64_t size) override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return ReadST(buffer, size);
-        } else {
-            return ReadST(buffer, size);
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return ReadST(buffer, size);
     }
 
     /*
@@ -166,12 +134,8 @@ public:
      */
     virtual uint64_t Write(std::span<const uint8_t> buffer) override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return WriteST(buffer);
-        } else {
-            return WriteST(buffer);
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return WriteST(buffer);
     }
     
     /*
@@ -179,12 +143,8 @@ public:
      */
     virtual uint64_t Write(const std::vector<uint8_t>& buffer) override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return WriteST(buffer);
-        } else {
-            return WriteST(buffer);
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return WriteST(buffer);
     }
 
     /*
@@ -192,12 +152,8 @@ public:
     */
     virtual FileMode GetMode() const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> stateLock(m_StateMutex);
-            return m_Mode;
-        } else {
-            return m_Mode;
-        }
+        auto lock = ThreadingPolicy::Lock(m_StateMutex);
+        return m_Mode;
     }
 
 private:
@@ -390,6 +346,14 @@ private:
     FileMode m_Mode;
     mutable std::mutex m_StateMutex;
 };
+
+using MultiThreadedNativeFile = NativeFile<MultiThreadedPolicy>;
+using MultiThreadedNativeFilePtr = NativeFilePtr<MultiThreadedPolicy>;
+using MultiThreadedNativeFileWeakPtr = NativeFileWeakPtr<MultiThreadedPolicy>;
+
+using SingleThreadedNativeFile = NativeFile<SingleThreadedPolicy>;
+using SingleThreadedNativeFilePtr = NativeFilePtr<SingleThreadedPolicy>;
+using SingleThreadedNativeFileWeakPtr = NativeFileWeakPtr<SingleThreadedPolicy>;
     
 } // namespace vfspp
 
