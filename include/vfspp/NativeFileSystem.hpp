@@ -480,7 +480,7 @@ private:
     mutable std::mutex m_Mutex;
 
     std::unordered_map<std::string, FileEntry> m_Files;
-    std::vector<FileInfo> m_FileList;
+    FilesList m_FileList;
 };
 
 } // namespace vfspp

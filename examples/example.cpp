@@ -20,15 +20,15 @@ int main()
     // Paths now relative to working directory where executable resides with copied test-data
     IFileSystemPtr rootFS = std::make_shared<NativeFileSystem>("test-data/files");
     IFileSystemPtr memFS = std::make_shared<MemoryFileSystem>();
-    // IFileSystemPtr zipFS = std::make_shared<ZipFileSystem>("test-data/test.zip");
+    IFileSystemPtr zipFS = std::make_shared<ZipFileSystem>("test-data/test.zip");
 
     rootFS->Initialize();
     memFS->Initialize();
-    // zipFS->Initialize();
+    zipFS->Initialize();
 
     vfs->AddFileSystem("/", rootFS);
     vfs->AddFileSystem("/memory", memFS);
-    // vfs->AddFileSystem("/zip", zipFS);
+    vfs->AddFileSystem("/zip", zipFS);
 
     printf("Native filesystem test:\n");
 
@@ -54,17 +54,16 @@ int main()
 
     printf("Zip filesystem test:\n");
 
-//    IFileSystem::FilesList files = zipFS->FileList();
-//    for (auto& file : files) {
-//		printf("Zip file entry: %s\n", file.AbsolutePath().c_str());
-//	}
-//
-//    IFilePtr zipFile = vfs->OpenFile(FileInfo("/zip/file.txt"), IFile::FileMode::Read);
-//    if (zipFile && zipFile->IsOpened()) {
-//        PrintFile("File /zip/file.txt:", zipFile);
-//    }
+    IFileSystem::FilesList files = zipFS->FileList();
+    for (auto& file : files) {
+        printf("Zip file entry: %s\n", file.AbsolutePath().c_str());
+    }
 
-    // printf("DLC filesystem test:\n");
+    if (IFilePtr zipFile = vfs->OpenFile(FileInfo("/zip/file.txt"), IFile::FileMode::Read)) {
+        PrintFile("File /zip/file.txt:", zipFile);
+    }
+
+    printf("DLC filesystem test:\n");
     
     IFileSystemPtr dlc1FS(new NativeFileSystem("test-data/dlc1"));
     IFileSystemPtr dlc2FS(new NativeFileSystem("test-data/dlc2"));

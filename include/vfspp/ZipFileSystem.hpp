@@ -1,5 +1,3 @@
-#if 0
-
 #ifndef ZIPFILESYSTEM_HPP
 #define ZIPFILESYSTEM_HPP
 
@@ -64,7 +62,12 @@ public:
      */
     virtual bool IsInitialized() const override
     {
-        return m_IsInitialized;
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            return IsInitializedST();
+        } else {
+            return IsInitializedST();
+        }
     }
     
     /*
@@ -83,7 +86,7 @@ public:
     /*
      * Retrieve file list according filter
      */
-    virtual const TFileList& FileList() const override
+    virtual const FilesList& FileList() const override
     {
         if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
             std::lock_guard<std::mutex> lock(m_Mutex);
@@ -134,7 +137,7 @@ public:
     /*
      * Copy existing file on writable filesystem
      */
-    virtual bool CopyFile(const FileInfo& src, const FileInfo& dest) override
+    virtual bool CopyFile(const FileInfo& src, const FileInfo& dest, bool overwrite = false) override
     {
         return false;
     }
@@ -151,7 +154,12 @@ public:
     */
     virtual void CloseFile(IFilePtr file) override
     {
-        //NO-OP
+        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            CloseFileST(file);
+        } else {
+            CloseFileST(file);
+        }
     }
     /*
      * Check if file exists on filesystem
@@ -193,6 +201,29 @@ public:
     }
 
 private:
+    struct FileEntry
+    {
+        FileInfo Info;
+        std::vector<ZipFileWeakPtr> OpenedHandles;
+
+        uint32_t EntryID;
+        uint64_t Size;
+
+        explicit FileEntry(const FileInfo& info, uint32_t entryID, uint64_t size)
+            : Info(info)
+            , EntryID(entryID)
+            , Size(size)
+        {
+        }
+
+        void CleanupOpenedHandles(IFilePtr fileToExclude = nullptr)
+        {
+            OpenedHandles.erase(std::remove_if(OpenedHandles.begin(), OpenedHandles.end(), [&](const ZipFileWeakPtr& weak) {
+                return weak.expired() || weak.lock() == fileToExclude;
+            }), OpenedHandles.end());
+        }
+    };
+
     inline void InitializeST()
     {
         if (m_IsInitialized) {
@@ -210,17 +241,14 @@ private:
             return;
         }
 
-        BuildFilelist(m_ZipArchive, m_FileList);
+        BuildFilelist(m_ZipArchive, m_FileList, m_Files);
         m_IsInitialized = true;
     }
 
     inline void ShutdownST()
     {
         m_ZipPath = "";
-        // close all files
-        for (auto& file : m_FileList) {
-            file.second->Close();
-        }
+        m_Files.clear();
         m_FileList.clear();
 
         // close zip archive
@@ -243,37 +271,42 @@ private:
         return rootPath;
     }
 
-    inline const TFileList& FileListST() const
+    inline const FilesList& FileListST() const
     {
         return m_FileList;
     }
     
     inline IFilePtr OpenFileST(const FileInfo& filePath, IFile::FileMode mode)
     {
-        // check if filesystem is readonly and mode is write then return null
-        bool requestWrite = ((mode & IFile::FileMode::Write) == IFile::FileMode::Write);
-        requestWrite |= ((mode & IFile::FileMode::Append) == IFile::FileMode::Append);
-        requestWrite |= ((mode & IFile::FileMode::Truncate) == IFile::FileMode::Truncate);
+        auto absolutePath = filePath.AbsolutePath();
 
-        // Note 'IsReadOnly()' is safe to call on any thread
-        if (IsReadOnly() && requestWrite) {
+        const auto entryIt = m_Files.find(absolutePath);
+        if (entryIt == m_Files.end()) {
+            return nullptr;
+        }
+        auto& entry = entryIt->second;
+
+        ZipFilePtr file = std::make_shared<ZipFile>(entry.Info, entry.EntryID, entry.Size, m_ZipArchive);
+        if (!file || !file->Open(mode)) {
             return nullptr;
         }
 
-        IFilePtr file = FindFile(filePath, m_FileList);
-        if (file) {
-            file->Open(mode);
-        }
+        entry.OpenedHandles.push_back(file);
         
         return file;
     }
 
-    inline bool IsFileExistsST(const FileInfo& filePath) const
+    inline void CloseFileST(IFilePtr file)
     {
-        return FindFile(filePath, m_FileList) != nullptr;
+        CloseFileAndCleanupOpenedHandles(file);
     }
 
-    void BuildFilelist(std::shared_ptr<mz_zip_archive> zipArchive, TFileList& outFileList)
+    inline bool IsFileExistsST(const FileInfo& filePath) const
+    {
+        return m_Files.find(filePath.AbsolutePath()) != m_Files.end();
+    }
+
+    void BuildFilelist(std::shared_ptr<mz_zip_archive> zipArchive, FilesList& outFileList, std::unordered_map<std::string, FileEntry>& outFiles)
     {
         for (mz_uint i = 0; i < mz_zip_reader_get_num_files(zipArchive.get()); i++) {
             mz_zip_archive_file_stat file_stat;
@@ -283,8 +316,34 @@ private:
             }
             
             FileInfo fileInfo(BasePathST(), file_stat.m_filename, false);
-            IFilePtr file(new ZipFile(fileInfo, file_stat.m_file_index, file_stat.m_uncomp_size, zipArchive));
-            outFileList[fileInfo.AbsolutePath()] = file;
+            
+            outFileList.push_back(fileInfo);
+            outFiles.emplace(
+                fileInfo.AbsolutePath(),
+                FileEntry(
+                    fileInfo,
+                    static_cast<uint32_t>(file_stat.m_file_index),
+                    static_cast<uint64_t>(file_stat.m_uncomp_size)
+                )
+            );
+        }
+    }
+
+    inline void CloseFileAndCleanupOpenedHandles(IFilePtr fileToClose = nullptr)
+    {
+        if (fileToClose) {
+            const auto absolutePath = fileToClose->GetFileInfo().AbsolutePath();
+            
+            const auto it = m_Files.find(absolutePath);
+            if (it == m_Files.end()) {
+                return;
+            }
+            
+            fileToClose->Close();
+        }
+
+        for (auto& [path, entry] : m_Files) {
+            entry.CleanupOpenedHandles(fileToClose);
         }
     }
     
@@ -292,12 +351,12 @@ private:
     std::string m_ZipPath;
     std::shared_ptr<mz_zip_archive> m_ZipArchive;
     bool m_IsInitialized;
-    TFileList m_FileList;
     mutable std::mutex m_Mutex;
+
+    FilesList m_FileList;
+    std::unordered_map<std::string, FileEntry> m_Files;
 };
 
 } // namespace vfspp
 
 #endif // ZIPFILESYSTEM_HPP
-
-#endif // 0
