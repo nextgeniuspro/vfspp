@@ -192,7 +192,7 @@ private:
 
         for (const Alias& alias : m_SortedAlias) {
             const std::string& aliasString = alias.String();
-            if (!StringUtils::StartsWith(absolutePath, aliasString)) {
+            if (!absolutePath.starts_with(aliasString)) {
                 continue;
             }
 

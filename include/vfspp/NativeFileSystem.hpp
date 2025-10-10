@@ -3,7 +3,6 @@
 
 #include "IFileSystem.h"
 #include "Global.h"
-#include "StringUtils.hpp"
 #include "NativeFile.hpp"
 
 namespace fs = std::filesystem;

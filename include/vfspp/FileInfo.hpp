@@ -2,7 +2,6 @@
 #define FILEINFO_HPP
 
 #include "Global.h"
-#include "StringUtils.hpp"
 
 namespace fs = std::filesystem;
 

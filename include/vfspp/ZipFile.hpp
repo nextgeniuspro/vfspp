@@ -21,7 +21,6 @@ public:
         , m_EntryID(entryID)
         , m_Size(size)
         , m_ZipArchive(zipArchive)
-        , m_IsOpened(false)
         , m_SeekPos(0)
     {
     }   
@@ -235,28 +234,18 @@ private:
         if (!zipArchive) {
             return false;
         }
-        
-        m_Data.resize(m_Size);
-        m_IsOpened = mz_zip_reader_extract_to_mem_no_alloc(zipArchive.get(), m_EntryID, m_Data.data(), static_cast<size_t>(m_Size), 0, 0, 0);
-        
-        if (!m_IsOpened) {
-            m_Data.clear();
-        }
-        
+                
         return true;
     }
     
     inline void CloseST()
     {
-        m_IsOpened = false;
         m_SeekPos = 0;
-
-        m_Data.clear();
     }
     
     inline bool IsOpenedST() const
     {
-        return m_IsOpened;
+        return !m_ZipArchive.expired();
     }
     
     inline uint64_t SeekST(uint64_t offset, Origin origin)
@@ -284,14 +273,60 @@ private:
         return m_SeekPos;
     }
     
+    struct PartialExtractContext {
+        size_t Offset;              // Bytes to skip
+        size_t SizeToRead;          // Number of bytes we want to read
+        size_t TotalRead;           // How many bytes written so far
+        unsigned char* OutBuffer;   // Pointer to output buffer
+    };
+
+    // Callback used by miniz during extraction
+    static size_t partialExtractCallback(void* opaque, mz_uint64 fileOffset, const void* buffer, size_t size)
+    {
+        PartialExtractContext* ctx = reinterpret_cast<PartialExtractContext*>(opaque);
+
+        // If data comes before the desired offset, skip it
+        if (fileOffset + size <= ctx->Offset) {
+            // Entire block is before the target range, skip
+            return size;
+        }
+
+        // Determine how much of this block overlaps with the desired range
+        size_t startInBlock = 0;
+        if (fileOffset < ctx->Offset) {
+            startInBlock = ctx->Offset - fileOffset;
+        }
+
+        size_t available = size - startInBlock;
+
+        // Stop if we've already read enough
+        if (ctx->TotalRead >= ctx->SizeToRead) {
+            return size;
+        }
+
+        // How much we can copy this time
+        size_t remaining = ctx->SizeToRead - ctx->TotalRead;
+        size_t numToCopy = (available < remaining) ? available : remaining;
+
+        // Copy data into buffer
+        std::memcpy(ctx->OutBuffer + ctx->TotalRead, static_cast<const unsigned char*>(buffer) + startInBlock, numToCopy);
+
+        ctx->TotalRead += numToCopy;
+        return size;
+    }
+
     inline uint64_t ReadST(std::span<uint8_t> buffer)
     {
         if (!IsOpenedST()) {
             return 0;
         }
+
+        std::shared_ptr<mz_zip_archive> zip = m_ZipArchive.lock();
+        if (!zip) {
+            return 0;
+        }
                 
-        const auto availableBytes = m_Data.size();
-        if (availableBytes <= m_SeekPos) {
+        if (m_Size <= m_SeekPos) {
             return 0;
         }
 
@@ -300,15 +335,32 @@ private:
             return 0;
         }
 
-        const auto bytesLeft = availableBytes - m_SeekPos;
+        const auto bytesLeft = m_Size - m_SeekPos;
         auto bytesToRead = std::min(bytesLeft, requestedBytes);
         if (bytesToRead == 0) {
             return 0;
         }
 
-        std::memcpy(buffer.data(), m_Data.data() + m_SeekPos, static_cast<std::size_t>(bytesToRead));
-        m_SeekPos += bytesToRead;
-        return bytesToRead;
+        PartialExtractContext ctx{};
+        ctx.Offset = m_SeekPos;
+        ctx.SizeToRead = bytesToRead;
+        ctx.TotalRead = 0;
+        ctx.OutBuffer = static_cast<unsigned char*>(buffer.data());
+
+        mz_bool ok = mz_zip_reader_extract_to_callback(
+            zip.get(),
+            m_EntryID,
+            partialExtractCallback,
+            &ctx,
+            0  // flags
+        );
+
+        if (!ok) {
+            return false;
+        }
+
+        m_SeekPos += ctx.TotalRead;
+        return ctx.TotalRead;
     }
     
     inline uint64_t WriteST(std::span<const uint8_t> buffer)
@@ -332,8 +384,6 @@ private:
     uint32_t m_EntryID;
     uint64_t m_Size;
     std::weak_ptr<mz_zip_archive> m_ZipArchive;
-    std::vector<uint8_t> m_Data;
-    bool m_IsOpened;
     uint64_t m_SeekPos;
     mutable std::mutex m_StateMutex;
 };

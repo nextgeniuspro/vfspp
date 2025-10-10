@@ -3,7 +3,6 @@
 
 #include "IFileSystem.h"
 #include "Global.h"
-#include "StringUtils.hpp"
 #include "MemoryFile.hpp"
 
 namespace vfspp
