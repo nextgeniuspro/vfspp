@@ -1,5 +1,5 @@
-#ifndef GLOBAL_H
-#define GLOBAL_H
+#ifndef VFSPP_GLOBAL_H
+#define VFSPP_GLOBAL_H
 
 #include <functional>
 #include <vector>
@@ -25,6 +25,7 @@
 #include <limits>
 #include <span>
 #include <type_traits>
+#include <unordered_set>
 
 
-#endif // GLOBAL_H
+#endif // VFSPP_GLOBAL_H

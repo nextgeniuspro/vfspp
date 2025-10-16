@@ -1,5 +1,5 @@
-#ifndef MEMORYFILE_HPP
-#define MEMORYFILE_HPP
+#ifndef VFSPP_MEMORYFILE_HPP
+#define VFSPP_MEMORYFILE_HPP
 
 #include "IFile.h"
 #include "ThreadingPolicy.hpp"
@@ -37,7 +37,6 @@ class MemoryFileObject
 
 public:
     MemoryFileObject() 
-        : m_Data(std::make_shared<std::vector<uint8_t>>())
     {
     }
 
@@ -55,12 +54,16 @@ public:
     }
 
     // Read access
-    DataPtr GetData() const noexcept {
+    [[nodiscard]]
+    DataPtr GetData() const noexcept 
+    {
         return std::atomic_load(&m_Data);
     }
 
     // Write access (copy-on-write)
-    DataPtr GetWritableData() {
+    [[nodiscard]]
+    DataPtr GetWritableData() 
+    {
         auto old = std::atomic_load(&m_Data);
 
         if (!old || old.use_count() == 1) {
@@ -73,7 +76,8 @@ public:
         return copy;
     }
 
-    void Reset() noexcept {
+    void Reset() noexcept 
+    {
         std::atomic_store(&m_Data, std::make_shared<std::vector<uint8_t>>());
     }
 
@@ -90,7 +94,7 @@ public:
     }
 
 private:
-    DataPtr m_Data;
+    DataPtr m_Data = std::make_shared<std::vector<uint8_t>>();
 };
 
 template <typename ThreadingPolicy>
@@ -103,9 +107,6 @@ public:
     MemoryFile(const FileInfo& fileInfo, MemoryFileObjectPtr object)
         : m_Object(std::move(object))
         , m_FileInfo(fileInfo)
-        , m_IsOpened(false)
-        , m_SeekPos(0)
-        , m_Mode(FileMode::Read)
     {
         if (!m_Object) {
             m_Object = std::make_shared<MemoryFileObject>();
@@ -120,37 +121,41 @@ public:
     /*
      * Get file information
      */
+    [[nodiscard]]
     virtual const FileInfo& GetFileInfo() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_StateMutex);
-        return GetFileInfoST();
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return GetFileInfoImpl();
     }
     
     /*
      * Returns file size
      */
-    virtual uint64_t Size() override
+    [[nodiscard]]
+    virtual uint64_t Size() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_StateMutex);
-        return SizeST();
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return SizeImpl();
     }
     
     /*
      * Check is readonly filesystem
      */
+    [[nodiscard]]
     virtual bool IsReadOnly() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_StateMutex);
-        return IsReadOnlyST();
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return IsReadOnlyImpl();
     }
     
     /*
      * Open file for reading/writting
      */
+    [[nodiscard]]
     virtual bool Open(FileMode mode) override
     {
-        auto lock = ThreadingPolicy::Lock(m_StateMutex);
-        return OpenST(mode);
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return OpenImpl(mode);
     }
     
     /*
@@ -158,17 +163,18 @@ public:
      */
     virtual void Close() override
     {
-        auto lock = ThreadingPolicy::Lock(m_StateMutex);
-        CloseST();
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        CloseImpl();
     }
     
     /*
      * Check is file ready for reading/writing
      */
+    [[nodiscard]]
     virtual bool IsOpened() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_StateMutex);
-        return IsOpenedST();
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return IsOpenedImpl();
     }
     
     /*
@@ -176,16 +182,17 @@ public:
      */
     virtual uint64_t Seek(uint64_t offset, Origin origin) override
     {
-        auto lock = ThreadingPolicy::Lock(m_StateMutex);
-        return SeekST(offset, origin);
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return SeekImpl(offset, origin);
     }
     /*
      * Returns offset in file
      */
-    virtual uint64_t Tell() override
+    [[nodiscard]]
+    virtual uint64_t Tell() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_StateMutex);
-        return TellST();
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return TellImpl();
     }
     
     /*
@@ -193,8 +200,8 @@ public:
      */
     virtual uint64_t Read(std::span<uint8_t> buffer) override
     {
-        auto lock = ThreadingPolicy::Lock(m_StateMutex);
-        return ReadST(buffer);
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return ReadImpl(buffer);
     }
 
     /*
@@ -202,8 +209,8 @@ public:
      */
     virtual uint64_t Read(std::vector<uint8_t>& buffer, uint64_t size) override
     {
-        auto lock = ThreadingPolicy::Lock(m_StateMutex);
-        return ReadST(buffer, size);
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return ReadImpl(buffer, size);
     }
 
     /*
@@ -211,8 +218,8 @@ public:
      */
     virtual uint64_t Write(std::span<const uint8_t> buffer) override
     {
-        auto lock = ThreadingPolicy::Lock(m_StateMutex);
-        return WriteST(buffer);
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return WriteImpl(buffer);
     }
     
     /*
@@ -220,17 +227,8 @@ public:
      */
     virtual uint64_t Write(const std::vector<uint8_t>& buffer) override
     {
-        auto lock = ThreadingPolicy::Lock(m_StateMutex);
-        return WriteST(buffer);
-    }
-
-    /*
-    * Get current file mode
-    */
-    virtual FileMode GetMode() const override
-    {
-        auto lock = ThreadingPolicy::Lock(m_StateMutex);
-        return m_Mode;
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return WriteImpl(buffer);
     }
 
 private:
@@ -240,14 +238,14 @@ private:
         return *m_Object;
     }
 
-    inline const FileInfo& GetFileInfoST() const
+    inline const FileInfo& GetFileInfoImpl() const
     {
         return m_FileInfo;
     }
     
-    inline uint64_t SizeST()
+    inline uint64_t SizeImpl() const
     {
-        if (!IsOpenedST()) {
+        if (!IsOpenedImpl()) {
             return 0;
         }
         
@@ -259,19 +257,19 @@ private:
         return data->size();
     }
 
-    inline bool IsReadOnlyST() const
+    inline bool IsReadOnlyImpl() const
     {
-        return IFile::IsModeWriteable(m_Mode) == false;
+        return !IFile::ModeHasFlag(m_Mode, FileMode::Write);
     }
 
-    inline bool OpenST(FileMode mode)
+    inline bool OpenImpl(FileMode mode)
     {
         if (!IFile::IsModeValid(mode)) {
             return false;
         }
 
-        if (IsOpenedST() && m_Mode == mode) {
-            SeekST(0, Origin::Begin);
+        if (IsOpenedImpl() && m_Mode == mode) {
+            SeekImpl(0, Origin::Begin);
             return true;
         }
         
@@ -279,7 +277,7 @@ private:
         m_SeekPos = 0;
         
         if (IFile::ModeHasFlag(mode, FileMode::Append)) {
-            const auto size = SizeST();
+            const auto size = SizeImpl();
             m_SeekPos = size > 0 ? size - 1 : 0;
         }
         if (IFile::ModeHasFlag(mode, FileMode::Truncate)) {
@@ -290,25 +288,25 @@ private:
         return true;
     }
 
-    inline void CloseST()
+    inline void CloseImpl()
     {
         m_IsOpened = false;
         m_SeekPos = 0;
         m_Mode = FileMode::Read;
     }
 
-    inline bool IsOpenedST() const
+    inline bool IsOpenedImpl() const
     {
         return m_IsOpened;
     }
 
-    inline uint64_t SeekST(uint64_t offset, Origin origin)
+    inline uint64_t SeekImpl(uint64_t offset, Origin origin)
     {
-        if (!IsOpenedST()) {
+        if (!IsOpenedImpl()) {
             return 0;
         }
 
-        const auto size = SizeST();
+        const auto size = SizeImpl();
         
         if (origin == Origin::Begin) {
             m_SeekPos = offset;
@@ -322,14 +320,14 @@ private:
         return m_SeekPos;
     }
 
-    inline uint64_t TellST()
+    inline uint64_t TellImpl() const
     {
         return m_SeekPos;
     }
     
-    inline uint64_t ReadST(std::span<uint8_t> buffer)
+    inline uint64_t ReadImpl(std::span<uint8_t> buffer)
     {
-        if (!IsOpenedST()) {
+        if (!IsOpenedImpl()) {
             return 0;
         }
 
@@ -364,9 +362,9 @@ private:
         return bytesToRead;
     }
 
-    inline uint64_t WriteST(std::span<const uint8_t> buffer)
+    inline uint64_t WriteImpl(std::span<const uint8_t> buffer)
     {
-        if (!IsOpenedST()) {
+        if (!IsOpenedImpl()) {
             return 0;
         }
         
@@ -396,26 +394,26 @@ private:
         return writeSize;
     }
 
-    inline uint64_t ReadST(std::vector<uint8_t>& buffer, uint64_t size)
+    inline uint64_t ReadImpl(std::vector<uint8_t>& buffer, uint64_t size)
     {
         buffer.resize(size);
-        return ReadST(std::span<uint8_t>(buffer.data(), buffer.size()));
+        return ReadImpl(std::span<uint8_t>(buffer.data(), buffer.size()));
     }
     
-    inline uint64_t WriteST(const std::vector<uint8_t>& buffer)
+    inline uint64_t WriteImpl(const std::vector<uint8_t>& buffer)
     {
-        return WriteST(std::span<const uint8_t>(buffer.data(), buffer.size()));
+        return WriteImpl(std::span<const uint8_t>(buffer.data(), buffer.size()));
     }
     
 private:
     MemoryFileObjectPtr m_Object;
     FileInfo m_FileInfo;
-    bool m_IsOpened;
-    uint64_t m_SeekPos;
-    FileMode m_Mode;
-    mutable std::mutex m_StateMutex;
+    bool m_IsOpened = false;
+    uint64_t m_SeekPos = 0;
+    FileMode m_Mode = FileMode::Read;
+    mutable std::mutex m_Mutex;
 };
 
 } // namespace vfspp
 
-#endif // MEMORYFILE_HPP
+#endif // VFSPP_MEMORYFILE_HPP

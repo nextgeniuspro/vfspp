@@ -1,5 +1,5 @@
-#ifndef ALIAS_HPP
-#define ALIAS_HPP
+#ifndef VFSPP_ALIAS_HPP
+#define VFSPP_ALIAS_HPP
 
 #include "Global.h"
 #include <string_view>
@@ -123,4 +123,4 @@ inline size_t Alias::HashValue() const noexcept
 
 } // namespace vfspp
 
-#endif // ALIAS_HPP
+#endif // VFSPP_ALIAS_HPP

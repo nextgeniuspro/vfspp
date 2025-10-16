@@ -1,14 +1,20 @@
-#ifndef VIRTUALFILESYSTEM_HPP
-#define VIRTUALFILESYSTEM_HPP
+#ifndef VFSPP_VIRTUALFILESYSTEM_HPP
+#define VFSPP_VIRTUALFILESYSTEM_HPP
 
 #include "IFileSystem.h"
 #include "IFile.h"
 #include "Alias.hpp"
 #include "ThreadingPolicy.hpp"
 
+#include <concepts>
+#include <type_traits>
+
 
 namespace vfspp
 {
+
+template <typename T>
+concept FileSystemDerived = std::derived_from<T, IFileSystem>;
 
 template <typename ThreadingPolicy>
 class VirtualFileSystem;
@@ -24,8 +30,8 @@ template <typename ThreadingPolicy>
 class VirtualFileSystem final
 {
 public:
-    typedef std::list<IFileSystemPtr> TFileSystemList;
-    typedef std::unordered_map<Alias, TFileSystemList, Alias::Hash> TFileSystemMap;
+    using FileSystemList = std::vector<IFileSystemPtr>;
+    using FileSystemMap = std::unordered_map<Alias, FileSystemList, Alias::Hash>;
     
 public:
     VirtualFileSystem()
@@ -71,20 +77,16 @@ public:
     }
 
     template <template <typename> class FileSystemType, typename... Args>
+        requires FileSystemDerived<FileSystemType<ThreadingPolicy>>
     [[nodiscard]] auto CreateFileSystem(const Alias& alias, Args&&... args)
         -> std::optional<std::shared_ptr<FileSystemType<ThreadingPolicy>>>
     {
-        using ConcreteFileSystem = FileSystemType<ThreadingPolicy>;
-        static_assert(std::is_base_of_v<IFileSystem, ConcreteFileSystem>,
-                      "FileSystemType must derive from IFileSystem");
-
-        auto filesystem = std::make_shared<ConcreteFileSystem>(std::forward<Args>(args)...);
+        auto filesystem = std::make_shared<FileSystemType<ThreadingPolicy>>(alias.String(), std::forward<Args>(args)...);
         if (!filesystem) {
             return {};
         }
 
-        filesystem->Initialize();
-        if (!filesystem->IsInitialized()) {
+        if (!filesystem->Initialize()) {
             return {};
         }
 
@@ -93,6 +95,7 @@ public:
     }
 
     template <template <typename> class FileSystemType, typename... Args>
+        requires FileSystemDerived<FileSystemType<ThreadingPolicy>>
     [[nodiscard]] auto CreateFileSystem(std::string alias, Args&&... args)
         -> std::optional<std::shared_ptr<FileSystemType<ThreadingPolicy>>>
     {
@@ -124,6 +127,7 @@ public:
     /*
      * Check if filesystem with 'alias' added
      */
+    [[nodiscard]]
     bool HasFileSystem(const Alias& alias, IFileSystemPtr fileSystem) const
     {
         auto lock = ThreadingPolicy::Lock(m_Mutex);
@@ -134,6 +138,7 @@ public:
         return false;
     }
 
+    [[nodiscard]]
     bool HasFileSystem(std::string alias, IFileSystemPtr fileSystem) const
     {
         return HasFileSystem(Alias(std::move(alias)), fileSystem);
@@ -157,12 +162,14 @@ public:
     /*
      * Check if there any filesystem with 'alias' registered
      */
+    [[nodiscard]]
     bool IsAliasRegistered(const Alias& alias) const
     {
         auto lock = ThreadingPolicy::Lock(m_Mutex);
         return m_FileSystems.find(alias) != m_FileSystems.end();
     }
 
+    [[nodiscard]]
     bool IsAliasRegistered(std::string alias) const
     {
         return IsAliasRegistered(Alias(std::move(alias)));
@@ -171,41 +178,42 @@ public:
     /*
      * Get all added filesystems with 'alias'
      */
-    const TFileSystemList& GetFilesystems(const Alias& alias)
+    [[nodiscard]]
+    std::optional<std::reference_wrapper<const FileSystemList>> GetFilesystems(const Alias& alias)
     {
         auto lock = ThreadingPolicy::Lock(m_Mutex);
-        return GetFilesystemsST(alias);
+        
+        return GetFilesystemsImpl(alias);
     }
 
-    const TFileSystemList& GetFilesystems(std::string alias)
+    [[nodiscard]]
+    std::optional<std::reference_wrapper<const FileSystemList>> GetFilesystems(std::string alias)
     {
         return GetFilesystems(Alias(std::move(alias)));
     }
 
 private:
     template<typename Callback>
-    auto VisitMountedFileSystems(const std::string& absolutePath, Callback&& callback) const
+    auto VisitMountedFileSystems(const std::string& virtualPath, Callback&& callback) const
     {
-        using CallbackResult = decltype(callback(std::declval<IFileSystemPtr>(), std::declval<const std::string&>(), std::declval<bool>()));
+        using CallbackResult = decltype(callback(std::declval<IFileSystemPtr>(), std::declval<bool>()));
 
         for (const Alias& alias : m_SortedAlias) {
-            const std::string& aliasString = alias.String();
-            if (!absolutePath.starts_with(aliasString)) {
+            if (!virtualPath.starts_with(alias.String())) {
                 continue;
             }
 
-            std::string relativePath = absolutePath.substr(alias.Length());
-
-            const TFileSystemList& filesystems = GetFilesystemsST(alias);
-            if (filesystems.empty()) {
+            auto fsResult = GetFilesystemsImpl(alias);
+            if (!fsResult) {
                 continue;
             }
 
+            const auto& filesystems = fsResult->get();
             for (auto it = filesystems.rbegin(); it != filesystems.rend(); ++it) {
                 IFileSystemPtr fs = *it;
                 bool isMain = (fs == filesystems.front());
 
-                CallbackResult result = callback(fs, relativePath, isMain);
+                CallbackResult result = callback(fs, isMain);
                 if (result) {
                     return result;
                 }
@@ -218,65 +226,34 @@ private:
 public:
     
     /*
-     * Iterate over all registered filesystems and find first ocurrences of file
+     * Iterate over all registered filesystems and find first ocurrences of file.
+     * Iteration occurs from the most recently added filesystem to the oldest one.
      */
-    IFilePtr OpenFile(const FileInfo& filePath, IFile::FileMode mode)
+    IFilePtr OpenFile(const std::string& virtualPath, IFile::FileMode mode)
     {
         auto lock = ThreadingPolicy::Lock(m_Mutex);
 
-        const std::string absolutePath = filePath.AbsolutePath();
-
-        auto result = VisitMountedFileSystems(absolutePath, [&](IFileSystemPtr fs, const std::string& relativePath, bool isMain) -> std::optional<IFilePtr> {
-            FileInfo realPath(fs->BasePath(), relativePath, false);
-            if (fs->IsFileExists(realPath) || isMain) {
-                IFilePtr file = fs->OpenFile(realPath, mode);
-                if (file) {
+        auto result = VisitMountedFileSystems(virtualPath, [&](IFileSystemPtr fs, bool /*isMain*/) -> std::optional<IFilePtr> {
+            if (fs->IsFileExists(virtualPath)) {
+                if (IFilePtr file = fs->OpenFile(virtualPath, mode)) {
                     return file;
                 }
             }
             return std::nullopt;
         });
 
-        if (result) {
-            return result.value();
-        }
-
-        return nullptr;
+        return result.value_or(nullptr);
     }
 
-    std::string AbsolutePath(std::string_view relativePath)
-    {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
-
-        std::string strRelativePath(relativePath);
-
-        auto result = VisitMountedFileSystems(strRelativePath, [&](IFileSystemPtr fs, const std::string& strippedRelativePath, bool isMain) -> std::optional<std::string> {
-            FileInfo realPath(fs->BasePath(), strippedRelativePath, false);
-            if (fs->IsFileExists(realPath) || isMain) {
-                return realPath.AbsolutePath();
-            }
-            return std::nullopt;
-        });
-
-        if (result) {
-            return result.value();
-        }
-
-        return std::string();
-    }
-    
     /*
      * Check if file exists in any registered filesystem
      */
-    bool IsFileExists(std::string_view relativePath) const
+    bool IsFileExists(const std::string& virtualPath) const
     {
         auto lock = ThreadingPolicy::Lock(m_Mutex);
 
-        std::string strRelativePath(relativePath);
-
-        auto result = VisitMountedFileSystems(strRelativePath, [&](IFileSystemPtr fs, const std::string& strippedRelativePath, bool /*isMain*/) -> std::optional<bool> {
-            FileInfo realPath(fs->BasePath(), strippedRelativePath, false);
-            if (fs->IsFileExists(realPath)) {
+        auto result = VisitMountedFileSystems(virtualPath, [&](IFileSystemPtr fs, bool /*isMain*/) -> std::optional<bool> {
+            if (fs->IsFileExists(virtualPath)) {
                 return true;
             }
             return std::nullopt;
@@ -290,80 +267,52 @@ public:
      * Returns a vector of all file paths with their aliases
      * Files from later registered filesystems override earlier ones
      */
-//    std::vector<std::string> ListAllFiles() const
-//    {
-//        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-//            std::lock_guard<std::mutex> lock(m_Mutex);
-//            return ListAllFilesST();
-//        } else {
-//            return ListAllFilesST();
-//        }
-//    }
+    std::vector<std::string> ListAllFiles() const
+    {
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        
+        std::vector<std::string> allFiles;
+        std::unordered_set<std::string> seenFiles;
+
+        for (const Alias& alias : m_SortedAlias) {
+            auto fsResult = GetFilesystemsImpl(alias);
+            if (!fsResult) {
+                continue;
+            }
+
+            const auto& filesystems = fsResult->get();
+            for (auto it = filesystems.rbegin(); it != filesystems.rend(); ++it) {
+
+                IFileSystemPtr fs = *it;
+                const IFileSystem::FilesList& fileList = fs->GetFilesList();
+
+                for (const auto& fileInfo : fileList) {
+                    const auto& virtualPath = fileInfo.VirtualPath();
+                    if (seenFiles.emplace(virtualPath).second) {
+                        allFiles.push_back(std::move(virtualPath));
+                    }
+                }
+            }
+        }   
+
+        std::sort(allFiles.begin(), allFiles.end());
+        return allFiles;
+    }
 
 private:
-//    std::vector<std::string> ListAllFilesST() const
-//    {
-//        std::vector<std::string> allFiles;
-//        std::unordered_set<std::string> seenFiles;
-//
-//        for (const Alias& alias : m_SortedAlias) {
-//            const std::string& aliasString = alias.String();
-//            const TFileSystemList& filesystems = GetFilesystemsST(alias);
-//            if (filesystems.empty()) {
-//                continue;
-//            }
-//
-//            // Enumerate reverse to give priority to later registered filesystems
-//            for (auto it = filesystems.rbegin(); it != filesystems.rend(); ++it) {
-//                IFileSystemPtr fs = *it;
-//                if (!fs || !fs->IsInitialized()) {
-//                    continue;
-//                }
-//
-//                const IFileSystem::TFileList& fileList = fs->FileList();
-//
-//                for (const auto& [relativePath, filePtr] : fileList) {
-//                    if (!filePtr || filePtr->GetFileInfo().IsDir()) {
-//                        continue;
-//                    }
-//
-//                    std::string fullPath;
-//                    fullPath.reserve(aliasString.size() + relativePath.size() + 1);
-//                    fullPath.append(aliasString);
-//                    if (!relativePath.empty()) {
-//                        if (relativePath.front() == '/') {
-//                            fullPath.append(relativePath.c_str() + 1); // skip leading slash
-//                        } else {
-//                            fullPath.append(relativePath);
-//                        }
-//                    }
-//
-//                    // Only add if not seen before (priority to later filesystems)
-//                    if (seenFiles.emplace(fullPath).second) {
-//                        allFiles.push_back(std::move(fullPath));
-//                    }
-//                }
-//            }
-//        }
-//
-//        std::sort(allFiles.begin(), allFiles.end());
-//        return allFiles;
-//    }
-
-    inline const TFileSystemList& GetFilesystemsST(const Alias& alias) const
+    [[nodiscard]]
+    std::optional<std::reference_wrapper<const FileSystemList>> GetFilesystemsImpl(const Alias& alias) const
     {
         auto it = m_FileSystems.find(alias);
         if (it != m_FileSystems.end()) {
-            return it->second;
+            return std::cref(it->second);
         }
         
-        static TFileSystemList empty;
-        return empty;
+        return {};
     }
-
     
 private:
-    TFileSystemMap m_FileSystems;
+    FileSystemMap m_FileSystems;
     std::vector<Alias> m_SortedAlias;
     mutable std::mutex m_Mutex;
 };
@@ -379,4 +328,4 @@ using SingleThreadedVirtualFileSystemWeakPtr = VirtualFileSystemWeakPtr<SingleTh
     
 }; // namespace vfspp
 
-#endif // VIRTUALFILESYSTEM_HPP
+#endif // VFSPP_VIRTUALFILESYSTEM_HPP

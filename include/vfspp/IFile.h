@@ -1,5 +1,5 @@
-#ifndef IFILE_H
-#define IFILE_H
+#ifndef VFSPP_IFILE_H
+#define VFSPP_IFILE_H
 
 #include "Global.h"
 #include "FileInfo.hpp"
@@ -44,21 +44,25 @@ public:
     /*
      * Get file information
      */
+    [[nodiscard]]
     virtual const FileInfo& GetFileInfo() const = 0;
     
     /*
      * Returns file size
      */
-    virtual uint64_t Size() = 0;
-    
+    [[nodiscard]]
+    virtual uint64_t Size() const = 0;
+
     /*
      * Check is readonly filesystem
      */
+    [[nodiscard]]
     virtual bool IsReadOnly() const = 0;
     
     /*
      * Open file for reading/writing
      */
+    [[nodiscard]]
     virtual bool Open(FileMode mode) = 0;
     
     /*
@@ -69,6 +73,7 @@ public:
     /*
      * Check is file ready for reading/writing
      */
+    [[nodiscard]]
     virtual bool IsOpened() const = 0;
     
     /*
@@ -79,8 +84,9 @@ public:
     /*
      * Returns offset in file
      */
-    virtual uint64_t Tell() = 0;
-    
+    [[nodiscard]]
+    virtual uint64_t Tell() const = 0;
+
     /*
      * Read data from file to buffer
      */
@@ -102,21 +108,17 @@ public:
     virtual uint64_t Write(const std::vector<uint8_t>& buffer) = 0;
 
     /*
-    * Get current file mode
+    * Helpers to check if mode has specific flag
     */
-    virtual FileMode GetMode() const = 0;
-
-    /*
-    * Validate if mode is writeable
-    */
-    static bool IsModeWriteable(FileMode mode)
+    static bool ModeHasFlag(FileMode mode, FileMode flag)
     {
-        return ModeHasFlag(mode, FileMode::Write);
+        return (static_cast<uint8_t>(mode) & static_cast<uint8_t>(flag)) != 0;
     }
 
     /*
     * Validate if mode is correct
     */
+    [[nodiscard]]
     static bool IsModeValid(FileMode mode)
     {
         // Must have at least read or write flag
@@ -135,14 +137,6 @@ public:
         }
 
         return true;
-    }
-
-    /*
-    * Helpers to check if mode has specific flag
-    */
-    static bool ModeHasFlag(FileMode mode, FileMode flag)
-    {
-        return (static_cast<uint8_t>(mode) & static_cast<uint8_t>(flag)) != 0;
     }
 };
     
@@ -177,4 +171,4 @@ constexpr IFile::FileMode operator~(IFile::FileMode perm) {
     
 } // namespace vfspp
 
-#endif /* IFILE_H */
+#endif // VFSPP_IFILE_H

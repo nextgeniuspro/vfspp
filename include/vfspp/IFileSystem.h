@@ -1,5 +1,5 @@
-#ifndef IFILESYSTEM_H
-#define IFILESYSTEM_H
+#ifndef VFSPP_IFILESYSTEM_H
+#define VFSPP_IFILESYSTEM_H
 
 #include "IFile.h"
 
@@ -21,7 +21,8 @@ public:
     /*
      * Initialize filesystem, call this method as soon as possible
      */
-    virtual void Initialize() = 0;
+    [[nodiscard]]
+    virtual bool Initialize() = 0;
     /*
      * Shutdown filesystem
      */
@@ -30,27 +31,37 @@ public:
     /*
      * Check if filesystem is initialized
      */
+    [[nodiscard]]
     virtual bool IsInitialized() const = 0;
     
     /*
      * Get base path
      */
+    [[nodiscard]]
     virtual const std::string& BasePath() const = 0;
+
+    /*
+    * Get mounted path
+    */
+    [[nodiscard]]
+    virtual const std::string& VirtualPath() const = 0;
     
     /*
-     * Retrieve file list according filter
+     * Retrieve all files in filesystem. Heavy operation, avoid calling this often
      */
-    virtual const FilesList& FileList() const = 0;
+    [[nodiscard]]
+    virtual FilesList GetFilesList() const = 0;
     
     /*
      * Check is readonly filesystem
      */
+    [[nodiscard]]
     virtual bool IsReadOnly() const = 0;
     
     /*
      * Open existing file for reading, if not exists return null
      */
-    virtual IFilePtr OpenFile(const FileInfo& filePath, IFile::FileMode mode) = 0;
+    virtual IFilePtr OpenFile(const std::string& virtualPath, IFile::FileMode mode) = 0;
     
     /*
      * Close file
@@ -60,65 +71,30 @@ public:
     /*
      * Create file on writeable filesystem. Return true if file already exists
      */
-    virtual bool CreateFile(const FileInfo& filePath) = 0;
+    virtual IFilePtr CreateFile(const std::string& virtualPath) = 0;
     
     /*
      * Remove existing file on writable filesystem
      */
-    virtual bool RemoveFile(const FileInfo& filePath) = 0;
+    virtual bool RemoveFile(const std::string& virtualPath) = 0;
     
     /*
      * Copy existing file on writable filesystem
      */
-    virtual bool CopyFile(const FileInfo& src, const FileInfo& dest, bool overwrite = false) = 0;
+    virtual bool CopyFile(const std::string& srcVirtualPath, const std::string& dstVirtualPath, bool overwrite = false) = 0;
     
     /*
      * Rename existing file on writable filesystem (Move file)
      */
-    virtual bool RenameFile(const FileInfo& src, const FileInfo& dest) = 0;
+    virtual bool RenameFile(const std::string& srcVirtualPath, const std::string& dstVirtualPath) = 0;
     
     /*
      * Check if file exists on filesystem
      */
-    virtual bool IsFileExists(const FileInfo& filePath) const = 0;
-    
-    /*
-     * Check is file
-     */
-    virtual bool IsFile(const FileInfo& filePath) const = 0;
-    
-    /*
-     * Check is dir
-     */
-    virtual bool IsDir(const FileInfo& dirPath) const = 0;
-
-protected:
-    inline bool IsFile(const FileInfo& filePath, const FilesList& fileList) const
-    {
-        auto fileInfo = FindFileInfo(filePath, fileList);
-        if (fileInfo) {
-            return !fileInfo.value().IsDir();
-        }
-        return false;
-    }
-    
-    inline bool IsDir(const FileInfo& dirPath, const FilesList& fileList) const
-    {
-        return !IsFile(dirPath, fileList);
-    }
-
-    std::optional<FileInfo> FindFileInfo(const FileInfo& fileInfo, const FilesList& fileList) const
-    {
-        auto it = std::find_if(fileList.begin(), fileList.end(), [&fileInfo](const FileInfo& f) {
-            return (f.AbsolutePath() == fileInfo.AbsolutePath());
-        });
-        if (it != fileList.end()) {
-            return std::optional(*it);
-        }
-        return std::nullopt;
-    }
+    [[nodiscard]]
+    virtual bool IsFileExists(const std::string& virtualPath) const = 0;
 };
 
 }; // namespace vfspp
 
-#endif // IFILESYSTEM_H
+#endif // VFSPP_IFILESYSTEM_H

@@ -1,5 +1,5 @@
-#ifndef FILEINFO_HPP
-#define FILEINFO_HPP
+#ifndef VFSPP_FILEINFO_HPP
+#define VFSPP_FILEINFO_HPP
 
 #include "Global.h"
 
@@ -11,104 +11,102 @@ namespace vfspp
 class FileInfo final
 {
 public:
-    FileInfo(const std::string& filePath)
+    FileInfo(const std::string& aliasPath, const std::string& basePath, const std::string& fileName)
     {
-        Configure("", filePath, false);
-    }
-
-    FileInfo(const std::string& basePath, const std::string& fileName, bool isDir)
-    {
-        Configure(basePath, fileName, isDir);
-    }
-
-    FileInfo(const fs::path& path, bool isDir)
-        : m_Path(path)
-        , m_IsDir(isDir)
-    {
+        Configure(aliasPath, basePath, fileName);
     }
 
     FileInfo() = delete;
-
-    ~FileInfo()
-    {
-
-    }
+    ~FileInfo() = default;
     
     /*
      * Get file name with extension
      */
-    inline std::string Name() const
+    inline const std::string& Filename() const
     {
-        return m_Path.filename().string();
+        return m_Filename;
     }
     
     /*
      * Get file name without extension
      */
-    inline std::string BaseName() const
+    inline const std::string& BaseFilename() const
     {
-        return m_Path.stem().string();
+        return m_BaseFilename;
     }
     
     /*
      * Get file extension
      */
-    inline std::string Extension() const
+    inline const std::string& Extension() const
     {
-        return m_Path.extension().string();
-    }
-    
-    /*
-     * Get absolute file path
-     */
-    inline std::string AbsolutePath() const
-    {
-        return m_Path.string();
-    }
-    
-    /*
-     * Is a directory
-     */
-    inline bool IsDir() const
-    {
-        return m_IsDir;
+        return m_Extension;
     }
 
-    inline const fs::path& Path() const
+    /*
+    * Get path to the file without alias or base path
+    */
+    inline const std::string& FilePath() const
     {
-        return m_Path;
+        return m_Filepath;
     }
     
     /*
-     *
+     * Get aliased file path, the path used to access file in virtual filesystem
      */
-    inline bool IsValid() const
+    inline const std::string& VirtualPath() const
     {
-        return !m_Path.string().empty();
+        return m_VirtualPath;
+    }
+
+    /*
+     * Get native file path, the path used to access file in native filesystem
+     */
+    inline const std::string& NativePath() const
+    {
+        return m_NativePath;
     }
 
 private:
-    void Configure(const std::string& basePath, const std::string& fileName, bool isDir)
+    void Configure(const std::string& aliasPath, const std::string& basePath, const std::string& fileName)
     {
-        m_Path = (fs::path(basePath) / fs::path(fileName)).generic_string();
-        m_IsDir = isDir;
+        // Remove alias path from file name if any
+        std::string strippedFileName = fileName;
+        if (!aliasPath.empty() && fileName.find(aliasPath) == 0) {
+            strippedFileName = fileName.substr(aliasPath.length());
+        }
+
+        const auto filePath = fs::path(strippedFileName);
+
+        m_Filepath = filePath.generic_string();
+        m_VirtualPath = (fs::path(aliasPath) / filePath).generic_string();
+        m_NativePath = (fs::path(basePath) / filePath).generic_string();
+
+        m_Filename = filePath.filename().string();
+        m_Extension = filePath.has_extension() ? filePath.extension().string() : "";
+        m_BaseFilename = filePath.stem().string();
     }
     
 private:
-    fs::path m_Path;
-    bool m_IsDir;
+    std::string m_Filename;
+    std::string m_BaseFilename;
+    std::string m_Extension;
+    
+    std::string m_Filepath;
+    std::string m_VirtualPath;
+    std::string m_NativePath;
 };
     
 inline bool operator ==(const FileInfo& fi1, const FileInfo& fi2)
 {
-    return fi1.AbsolutePath() == fi2.AbsolutePath();
+    return fi1.VirtualPath() == fi2.VirtualPath();
 }
     
 inline bool operator <(const FileInfo& fi1, const FileInfo& fi2)
 {
-    return fi1.AbsolutePath() < fi2.AbsolutePath();
+    return fi1.VirtualPath() < fi2.VirtualPath();
 }
     
 }; // namespace vfspp
 
-#endif // FILEINFO_HPP
+#endif // VFSPP_FILEINFO_HPP
