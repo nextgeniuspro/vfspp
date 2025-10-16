@@ -309,7 +309,7 @@ private:
         );
 
         if (!ok) {
-            return false;
+            return 0;
         }
 
         m_SeekPos += ctx.TotalRead;
