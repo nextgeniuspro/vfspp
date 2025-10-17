@@ -1,5 +1,5 @@
-#ifndef GLOBAL_H
-#define GLOBAL_H
+#ifndef VFSPP_GLOBAL_H
+#define VFSPP_GLOBAL_H
 
 #include <functional>
 #include <vector>
@@ -11,6 +11,7 @@
 #include <sstream>
 #include <algorithm>
 #include <mutex>
+#include <shared_mutex>
 #include <memory>
 #include <utility>
 #include <math.h>
@@ -18,11 +19,13 @@
 #include <fstream>
 #include <iostream>
 #include <filesystem>
+#include <optional>
+#include <atomic>
+#include <cstring>
+#include <limits>
+#include <span>
+#include <type_traits>
+#include <unordered_set>
 
-#ifdef VFSPP_ENABLE_MULTITHREADING
-#define VFSPP_MT_SUPPORT_ENABLED true
-#else
-#define VFSPP_MT_SUPPORT_ENABLED false
-#endif
 
-#endif // GLOBAL_H
+#endif // VFSPP_GLOBAL_H

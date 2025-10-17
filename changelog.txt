@@ -1,0 +1,4 @@
+- Added Copy-on-write logic for Memory files
+- Each time file is opened a new handle (IFile object) is created
+- Removed legacy C-style code
+- 

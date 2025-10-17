@@ -1,9 +1,9 @@
-#ifndef ZIPFILESYSTEM_HPP
-#define ZIPFILESYSTEM_HPP
+#ifndef VFSPP_ZIPFILESYSTEM_HPP
+#define VFSPP_ZIPFILESYSTEM_HPP
 
 #include "IFileSystem.h"
 #include "Global.h"
-#include "StringUtils.hpp"
+#include "ThreadingPolicy.hpp"
 #include "ZipFile.hpp"
 #include "zip_file.hpp"
 
@@ -12,17 +12,23 @@ namespace fs = std::filesystem;
 namespace vfspp
 {
 
-using ZipFileSystemPtr = std::shared_ptr<class ZipFileSystem>;
-using ZipFileSystemWeakPtr = std::weak_ptr<class ZipFileSystem>;
+template <typename ThreadingPolicy>
+class ZipFileSystem;
+
+template <typename ThreadingPolicy>
+using ZipFileSystemPtr = std::shared_ptr<ZipFileSystem<ThreadingPolicy>>;
+
+template <typename ThreadingPolicy>
+using ZipFileSystemWeakPtr = std::weak_ptr<ZipFileSystem<ThreadingPolicy>>;
 
 
+template <typename ThreadingPolicy>
 class ZipFileSystem final : public IFileSystem
 {
 public:
-    ZipFileSystem(const std::string& zipPath)
-        : m_ZipPath(zipPath)
-        , m_ZipArchive(nullptr)
-        , m_IsInitialized(false)
+    ZipFileSystem(const std::string& aliasPath, const std::string& zipPath)
+        : m_AliasPath(aliasPath)
+        , m_ZipPath(zipPath)
     {
     }
 
@@ -34,14 +40,11 @@ public:
     /*
      * Initialize filesystem, call this method as soon as possible
      */
-    virtual void Initialize() override
+    [[nodiscard]]
+    virtual bool Initialize() override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            InitializeST();
-        } else {
-            InitializeST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return InitializeImpl();
     }
 
     /*
@@ -49,51 +52,54 @@ public:
      */
     virtual void Shutdown() override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            ShutdownST();
-        } else {
-            ShutdownST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        ShutdownImpl();
     }
     
     /*
      * Check if filesystem is initialized
      */
+    [[nodiscard]]
     virtual bool IsInitialized() const override
     {
-        return m_IsInitialized;
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return IsInitializedImpl();
     }
     
     /*
      * Get base path
      */
+    [[nodiscard]]
     virtual const std::string& BasePath() const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return BasePathST();
-        } else {
-            return BasePathST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return BasePathImpl();
+    }
+
+    /*
+    * Get mounted path
+    */
+    [[nodiscard]]
+    virtual const std::string& VirtualPath() const override
+    {
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return AliasPathImpl();
     }
     
     /*
      * Retrieve file list according filter
      */
-    virtual const TFileList& FileList() const override
+    [[nodiscard]]
+    virtual FilesList GetFilesList() const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return FileListST();
-        } else {
-            return FileListST();
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return GetFilesListST();
     }
     
     /*
      * Check is readonly filesystem
      */
+    [[nodiscard]]
     virtual bool IsReadOnly() const override
     {
         return true;
@@ -103,28 +109,24 @@ public:
      * Open existing file for reading, if not exists returns null for readonly filesystem. 
      * If file not exists and filesystem is writable then create new file
      */
-    virtual IFilePtr OpenFile(const FileInfo& filePath, IFile::FileMode mode) override
+    virtual IFilePtr OpenFile(const std::string& virtualPath, IFile::FileMode mode) override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return OpenFileST(filePath, mode);
-        } else {
-            return OpenFileST(filePath, mode);
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return OpenFileImpl(virtualPath, mode);
     }
     
     /*
      * Create file on writeable filesystem. Returns true if file created successfully
      */
-    virtual bool CreateFile(const FileInfo& filePath) override
+    virtual IFilePtr CreateFile(const std::string& virtualPath) override
     {
-        return false;
+        return nullptr;
     }
     
     /*
      * Remove existing file on writable filesystem
      */
-    virtual bool RemoveFile(const FileInfo& filePath) override
+    virtual bool RemoveFile(const std::string& virtualPath) override
     {
         return false;
     }
@@ -132,7 +134,7 @@ public:
     /*
      * Copy existing file on writable filesystem
      */
-    virtual bool CopyFile(const FileInfo& src, const FileInfo& dest) override
+    virtual bool CopyFile(const std::string& srcVirtualPath, const std::string& dstVirtualPath, bool overwrite = false) override
     {
         return false;
     }
@@ -140,7 +142,7 @@ public:
     /*
      * Rename existing file on writable filesystem
      */
-    virtual bool RenameFile(const FileInfo& srcPath, const FileInfo& dstPath) override
+    virtual bool RenameFile(const std::string& srcVirtualPath, const std::string& dstVirtualPath) override
     {
         return false;
     }
@@ -149,77 +151,69 @@ public:
     */
     virtual void CloseFile(IFilePtr file) override
     {
-        //NO-OP
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        CloseFileImpl(file);
     }
     /*
      * Check if file exists on filesystem
      */
-    virtual bool IsFileExists(const FileInfo& filePath) const override
+    [[nodiscard]]
+    virtual bool IsFileExists(const std::string& virtualPath) const override
     {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return IsFileExistsST(filePath);
-        } else {
-            return IsFileExistsST(filePath);
-        }
-    }
-
-    /*
-     * Check is file
-     */
-    virtual bool IsFile(const FileInfo& filePath) const override
-    {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return IFileSystem::IsFile(filePath, m_FileList);
-        } else {
-            return IFileSystem::IsFile(filePath, m_FileList);
-        }
-    }
-    
-    /*
-     * Check is dir
-     */
-    virtual bool IsDir(const FileInfo& dirPath) const override
-    {
-        if constexpr (VFSPP_MT_SUPPORT_ENABLED) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            return IFileSystem::IsDir(dirPath, m_FileList);
-        } else {
-            return IFileSystem::IsDir(dirPath, m_FileList);
-        }
+        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return IsFileExistsImpl(virtualPath);
     }
 
 private:
-    inline void InitializeST()
+    struct FileEntry
+    {
+        FileInfo Info;
+        std::vector<ZipFileWeakPtr<ThreadingPolicy>> OpenedHandles;
+
+        uint32_t EntryID;
+        uint64_t Size;
+
+        explicit FileEntry(const FileInfo& info, uint32_t entryID, uint64_t size)
+            : Info(info)
+            , EntryID(entryID)
+            , Size(size)
+        {
+        }
+
+        void CleanupOpenedHandles(IFilePtr fileToExclude = nullptr)
+        {
+            OpenedHandles.erase(std::remove_if(OpenedHandles.begin(), OpenedHandles.end(), [&](const ZipFileWeakPtr<ThreadingPolicy>& weak) {
+                return weak.expired() || weak.lock() == fileToExclude;
+            }), OpenedHandles.end());
+        }
+    };
+
+    inline bool InitializeImpl()
     {
         if (m_IsInitialized) {
-            return;
+            return true;
         }
 
         if (!fs::is_regular_file(m_ZipPath)) {
-            return;
+            return false;
         }
 
         m_ZipArchive = std::make_shared<mz_zip_archive>();
 
         mz_bool status = mz_zip_reader_init_file(m_ZipArchive.get(), m_ZipPath.c_str(), 0);
         if (!status) {
-            return;
+            return false;
         }
 
-        BuildFilelist(m_ZipArchive, m_FileList);
+        BuildFilelist(AliasPathImpl(), BasePathImpl(), m_ZipArchive, m_Files);
         m_IsInitialized = true;
+        return true;
     }
 
-    inline void ShutdownST()
+    inline void ShutdownImpl()
     {
         m_ZipPath = "";
-        // close all files
-        for (auto& file : m_FileList) {
-            file.second->Close();
-        }
-        m_FileList.clear();
+        m_Files.clear();
 
         // close zip archive
         if (m_ZipArchive) {
@@ -230,48 +224,60 @@ private:
         m_IsInitialized = false;
     }
     
-    inline bool IsInitializedST() const
+    inline bool IsInitializedImpl() const
     {
         return m_IsInitialized;
     }
 
-    inline const std::string& BasePathST() const
+    inline const std::string& BasePathImpl() const
     {
-        static std::string rootPath = "/";
-        return rootPath;
+        return m_AliasPath; // In zip filesystem, base path is same as alias path
     }
 
-    inline const TFileList& FileListST() const
+    inline const std::string& AliasPathImpl() const
     {
-        return m_FileList;
+        return m_AliasPath;
+    }
+
+    inline FilesList GetFilesListST() const
+    {
+        FilesList fileList;
+        fileList.reserve(m_Files.size());
+        for (const auto& [path, entry] : m_Files) {
+            fileList.push_back(entry.Info);
+        }
+        return fileList;
     }
     
-    inline IFilePtr OpenFileST(const FileInfo& filePath, IFile::FileMode mode)
+    inline IFilePtr OpenFileImpl(const std::string& virtualPath, IFile::FileMode mode)
     {
-        // check if filesystem is readonly and mode is write then return null
-        bool requestWrite = ((mode & IFile::FileMode::Write) == IFile::FileMode::Write);
-        requestWrite |= ((mode & IFile::FileMode::Append) == IFile::FileMode::Append);
-        requestWrite |= ((mode & IFile::FileMode::Truncate) == IFile::FileMode::Truncate);
+        const auto entryIt = m_Files.find(virtualPath);
+        if (entryIt == m_Files.end()) {
+            return nullptr;
+        }
+        auto& entry = entryIt->second;
 
-        // Note 'IsReadOnly()' is safe to call on any thread
-        if (IsReadOnly() && requestWrite) {
+        ZipFilePtr<ThreadingPolicy> file = std::make_shared<ZipFile<ThreadingPolicy>>(entry.Info, entry.EntryID, entry.Size, m_ZipArchive);
+        if (!file || !file->Open(mode)) {
             return nullptr;
         }
 
-        IFilePtr file = FindFile(filePath, m_FileList);
-        if (file) {
-            file->Open(mode);
-        }
+        entry.OpenedHandles.push_back(file);
         
         return file;
     }
 
-    inline bool IsFileExistsST(const FileInfo& filePath) const
+    inline void CloseFileImpl(IFilePtr file)
     {
-        return FindFile(filePath, m_FileList) != nullptr;
+        CloseFileAndCleanupOpenedHandles(file);
     }
 
-    void BuildFilelist(std::shared_ptr<mz_zip_archive> zipArchive, TFileList& outFileList)
+    inline bool IsFileExistsImpl(const std::string& virtualPath) const
+    {
+        return m_Files.find(virtualPath) != m_Files.end();
+    }
+
+    void BuildFilelist(const std::string& aliasPath, const std::string& basePath, std::shared_ptr<mz_zip_archive> zipArchive, std::unordered_map<std::string, FileEntry>& outFiles)
     {
         for (mz_uint i = 0; i < mz_zip_reader_get_num_files(zipArchive.get()); i++) {
             mz_zip_archive_file_stat file_stat;
@@ -280,20 +286,54 @@ private:
                 continue;
             }
             
-            FileInfo fileInfo(BasePathST(), file_stat.m_filename, false);
-            IFilePtr file(new ZipFile(fileInfo, file_stat.m_file_index, file_stat.m_uncomp_size, zipArchive));
-            outFileList[fileInfo.AbsolutePath()] = file;
+            FileInfo fileInfo(aliasPath, basePath, file_stat.m_filename);
+            outFiles.emplace(
+                fileInfo.VirtualPath(),
+                FileEntry(
+                    fileInfo,
+                    static_cast<uint32_t>(file_stat.m_file_index),
+                    static_cast<uint64_t>(file_stat.m_uncomp_size)
+                )
+            );
+        }
+    }
+
+    inline void CloseFileAndCleanupOpenedHandles(IFilePtr fileToClose = nullptr)
+    {
+        if (fileToClose) {
+            const auto absolutePath = fileToClose->GetFileInfo().VirtualPath();
+            
+            const auto it = m_Files.find(absolutePath);
+            if (it == m_Files.end()) {
+                return;
+            }
+            
+            fileToClose->Close();
+        }
+
+        for (auto& [path, entry] : m_Files) {
+            entry.CleanupOpenedHandles(fileToClose);
         }
     }
     
 private:
+    std::string m_AliasPath;
     std::string m_ZipPath;
-    std::shared_ptr<mz_zip_archive> m_ZipArchive;
-    bool m_IsInitialized;
-    TFileList m_FileList;
+    std::shared_ptr<mz_zip_archive> m_ZipArchive = nullptr;
+    bool m_IsInitialized = false;
     mutable std::mutex m_Mutex;
+
+    std::unordered_map<std::string, FileEntry> m_Files;
 };
+
+using MultiThreadedZipFileSystem = ZipFileSystem<MultiThreadedPolicy>;
+using MultiThreadedZipFileSystemPtr = ZipFileSystemPtr<MultiThreadedPolicy>;
+using MultiThreadedZipFileSystemWeakPtr = ZipFileSystemWeakPtr<MultiThreadedPolicy>;
+
+using SingleThreadedZipFileSystem = ZipFileSystem<SingleThreadedPolicy>;
+using SingleThreadedZipFileSystemPtr = ZipFileSystemPtr<SingleThreadedPolicy>;
+using SingleThreadedZipFileSystemWeakPtr = ZipFileSystemWeakPtr<SingleThreadedPolicy>;
 
 } // namespace vfspp
 
-#endif // ZIPFILESYSTEM_HPP
+#endif // VFSPP_ZIPFILESYSTEM_HPP
