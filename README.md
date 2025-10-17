@@ -28,7 +28,7 @@ Here's an example of how to set up multiple filesystems:
 
 auto vfs = std::make_shared<MultiThreadedVirtualFileSystem>();
 
-if (!vfs->CreateFileSystem<ZipFileSystem>("/", GetBundlePath() + "Documents/")) {
+if (!vfs->CreateFileSystem<NativeFileSystem>("/", GetBundlePath() + "Documents/")) {
 	// Handle error
 }
 if (!vfs->CreateFileSystem<ZipFileSystem>("/resources", "Resources.zip")) {
