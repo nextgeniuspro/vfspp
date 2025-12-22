@@ -3,7 +3,12 @@
 
 #include "Global.h"
 
+#ifdef VFSPP_DISABLE_STD_FILESYSTEM
+#include "FilesystemCompat.hpp"
+namespace fs = vfspp::fs_compat;
+#else
 namespace fs = std::filesystem;
+#endif
 
 namespace vfspp
 {
@@ -72,8 +77,13 @@ private:
     {
         // Remove alias path from file name if any
         std::string strippedFileName = fileName;
-        if (!aliasPath.empty() && fileName.find(aliasPath) == 0) {
-            strippedFileName = fileName.substr(aliasPath.length());
+        if (!basePath.empty() && fileName.find(basePath) == 0) {
+            strippedFileName = fileName.substr(basePath.length());
+        }
+
+        // Strip leading separators
+        while (!strippedFileName.empty() && (strippedFileName.front() == '/' || strippedFileName.front() == '\\')) {
+            strippedFileName.erase(strippedFileName.begin());
         }
 
         const auto filePath = fs::path(strippedFileName);

@@ -7,22 +7,20 @@
 #include "ZipFile.hpp"
 #include "zip_file.hpp"
 
+#ifdef VFSPP_DISABLE_STD_FILESYSTEM
+#include "FilesystemCompat.hpp"
+namespace fs = vfspp::fs_compat;
+#else
 namespace fs = std::filesystem;
+#endif
 
 namespace vfspp
 {
 
-template <typename ThreadingPolicy>
-class ZipFileSystem;
-
-template <typename ThreadingPolicy>
-using ZipFileSystemPtr = std::shared_ptr<ZipFileSystem<ThreadingPolicy>>;
-
-template <typename ThreadingPolicy>
-using ZipFileSystemWeakPtr = std::weak_ptr<ZipFileSystem<ThreadingPolicy>>;
+using ZipFileSystemPtr = std::shared_ptr<class ZipFileSystem>;
+using ZipFileSystemWeakPtr = std::weak_ptr<class ZipFileSystem>;
 
 
-template <typename ThreadingPolicy>
 class ZipFileSystem final : public IFileSystem
 {
 public:
@@ -43,7 +41,7 @@ public:
     [[nodiscard]]
     virtual bool Initialize() override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return InitializeImpl();
     }
 
@@ -52,7 +50,7 @@ public:
      */
     virtual void Shutdown() override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         ShutdownImpl();
     }
     
@@ -62,7 +60,7 @@ public:
     [[nodiscard]]
     virtual bool IsInitialized() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return IsInitializedImpl();
     }
     
@@ -72,7 +70,7 @@ public:
     [[nodiscard]]
     virtual const std::string& BasePath() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return BasePathImpl();
     }
 
@@ -82,7 +80,7 @@ public:
     [[nodiscard]]
     virtual const std::string& VirtualPath() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return AliasPathImpl();
     }
     
@@ -92,7 +90,7 @@ public:
     [[nodiscard]]
     virtual FilesList GetFilesList() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return GetFilesListST();
     }
     
@@ -111,7 +109,7 @@ public:
      */
     virtual IFilePtr OpenFile(const std::string& virtualPath, IFile::FileMode mode) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return OpenFileImpl(virtualPath, mode);
     }
     
@@ -151,7 +149,7 @@ public:
     */
     virtual void CloseFile(IFilePtr file) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         CloseFileImpl(file);
     }
     /*
@@ -160,7 +158,7 @@ public:
     [[nodiscard]]
     virtual bool IsFileExists(const std::string& virtualPath) const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return IsFileExistsImpl(virtualPath);
     }
 
@@ -168,7 +166,7 @@ private:
     struct FileEntry
     {
         FileInfo Info;
-        std::vector<ZipFileWeakPtr<ThreadingPolicy>> OpenedHandles;
+        std::vector<ZipFileWeakPtr> OpenedHandles;
 
         uint32_t EntryID;
         uint64_t Size;
@@ -182,7 +180,7 @@ private:
 
         void CleanupOpenedHandles(IFilePtr fileToExclude = nullptr)
         {
-            OpenedHandles.erase(std::remove_if(OpenedHandles.begin(), OpenedHandles.end(), [&](const ZipFileWeakPtr<ThreadingPolicy>& weak) {
+            OpenedHandles.erase(std::remove_if(OpenedHandles.begin(), OpenedHandles.end(), [&](const ZipFileWeakPtr& weak) {
                 return weak.expired() || weak.lock() == fileToExclude;
             }), OpenedHandles.end());
         }
@@ -231,7 +229,7 @@ private:
 
     inline const std::string& BasePathImpl() const
     {
-        return m_AliasPath; // In zip filesystem, base path is same as alias path
+        return m_BasePath; // Empty for zip filesystem
     }
 
     inline const std::string& AliasPathImpl() const
@@ -257,7 +255,7 @@ private:
         }
         auto& entry = entryIt->second;
 
-        ZipFilePtr<ThreadingPolicy> file = std::make_shared<ZipFile<ThreadingPolicy>>(entry.Info, entry.EntryID, entry.Size, m_ZipArchive);
+        ZipFilePtr file = std::make_shared<ZipFile>(entry.Info, entry.EntryID, entry.Size, m_ZipArchive);
         if (!file || !file->Open(mode)) {
             return nullptr;
         }
@@ -285,8 +283,14 @@ private:
                 // TODO: log error
                 continue;
             }
-            
-            FileInfo fileInfo(aliasPath, basePath, file_stat.m_filename);
+
+            // Skip directories (entries ending with '/')
+            std::string filename = file_stat.m_filename;
+            if (!filename.empty() && filename.back() == '/') {
+                continue;
+            }
+
+            FileInfo fileInfo(aliasPath, basePath, filename);
             outFiles.emplace(
                 fileInfo.VirtualPath(),
                 FileEntry(
@@ -318,6 +322,7 @@ private:
     
 private:
     std::string m_AliasPath;
+    std::string m_BasePath;
     std::string m_ZipPath;
     std::shared_ptr<mz_zip_archive> m_ZipArchive = nullptr;
     bool m_IsInitialized = false;
@@ -325,14 +330,6 @@ private:
 
     std::unordered_map<std::string, FileEntry> m_Files;
 };
-
-using MultiThreadedZipFileSystem = ZipFileSystem<MultiThreadedPolicy>;
-using MultiThreadedZipFileSystemPtr = ZipFileSystemPtr<MultiThreadedPolicy>;
-using MultiThreadedZipFileSystemWeakPtr = ZipFileSystemWeakPtr<MultiThreadedPolicy>;
-
-using SingleThreadedZipFileSystem = ZipFileSystem<SingleThreadedPolicy>;
-using SingleThreadedZipFileSystemPtr = ZipFileSystemPtr<SingleThreadedPolicy>;
-using SingleThreadedZipFileSystemWeakPtr = ZipFileSystemWeakPtr<SingleThreadedPolicy>;
 
 } // namespace vfspp
 

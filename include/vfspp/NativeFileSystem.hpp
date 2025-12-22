@@ -6,21 +6,19 @@
 #include "ThreadingPolicy.hpp"
 #include "NativeFile.hpp"
 
+#ifdef VFSPP_DISABLE_STD_FILESYSTEM
+#include "FilesystemCompat.hpp"
+namespace fs = vfspp::fs_compat;
+#else
 namespace fs = std::filesystem;
+#endif
 
 namespace vfspp
 {
 
-template <typename ThreadingPolicy>
-class NativeFileSystem;
+using NativeFileSystemPtr = std::shared_ptr<class NativeFileSystem>;
+using NativeFileSystemWeakPtr = std::weak_ptr<class NativeFileSystem>;
 
-template <typename ThreadingPolicy>
-using NativeFileSystemPtr = std::shared_ptr<NativeFileSystem<ThreadingPolicy>>;
-
-template <typename ThreadingPolicy>
-using NativeFileSystemWeakPtr = std::weak_ptr<NativeFileSystem<ThreadingPolicy>>;
-
-template <typename ThreadingPolicy>
 class NativeFileSystem final : public IFileSystem
 {
 public:
@@ -41,7 +39,7 @@ public:
     [[nodiscard]]
     virtual bool Initialize() override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return InitializeImpl();
     }
 
@@ -50,7 +48,7 @@ public:
      */
     virtual void Shutdown() override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         ShutdownImpl();
     }
     
@@ -60,7 +58,7 @@ public:
     [[nodiscard]]
     virtual bool IsInitialized() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return IsInitializedImpl();
     }
     
@@ -70,7 +68,7 @@ public:
     [[nodiscard]]
     virtual const std::string& BasePath() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return BasePathImpl();
     }
 
@@ -80,7 +78,7 @@ public:
     [[nodiscard]]
     virtual const std::string& VirtualPath() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return AliasPathImpl();
     }
     
@@ -90,7 +88,7 @@ public:
     [[nodiscard]]
     virtual FilesList GetFilesList() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return GetFilesListImpl();
     }
     
@@ -100,7 +98,7 @@ public:
     [[nodiscard]]
     virtual bool IsReadOnly() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return IsReadOnlyImpl();
     }
     
@@ -110,7 +108,7 @@ public:
      */
     virtual IFilePtr OpenFile(const std::string& virtualPath, IFile::FileMode mode) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return OpenFileImpl(virtualPath, mode);
     }
 
@@ -119,7 +117,7 @@ public:
      */
     virtual void CloseFile(IFilePtr file) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         CloseFileImpl(file);
     }
     
@@ -128,7 +126,7 @@ public:
      */
     virtual IFilePtr CreateFile(const std::string& virtualPath) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return OpenFileImpl(virtualPath, IFile::FileMode::ReadWrite | IFile::FileMode::Truncate);
     }
     
@@ -137,7 +135,7 @@ public:
      */
     virtual bool RemoveFile(const std::string& virtualPath) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return RemoveFileImpl(virtualPath);
     }
     
@@ -146,7 +144,7 @@ public:
      */
     virtual bool CopyFile(const std::string& srcVirtualPath, const std::string& dstVirtualPath, bool overwrite = false) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return CopyFileImpl(srcVirtualPath, dstVirtualPath, overwrite);
     }
     
@@ -155,7 +153,7 @@ public:
      */
     virtual bool RenameFile(const std::string& srcVirtualPath, const std::string& dstVirtualPath) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return RenameFileImpl(srcVirtualPath, dstVirtualPath);
     }
 
@@ -165,7 +163,7 @@ public:
     [[nodiscard]]
     virtual bool IsFileExists(const std::string& virtualPath) const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return IsFileExistsImpl(virtualPath);
     }
 
@@ -173,7 +171,7 @@ private:
     struct FileEntry
     {
         FileInfo Info;
-        std::vector<NativeFileWeakPtr<ThreadingPolicy>> OpenedHandles;
+        std::vector<NativeFileWeakPtr> OpenedHandles;
 
         explicit FileEntry(const FileInfo& info)
             : Info(info)
@@ -182,7 +180,7 @@ private:
 
         void CleanupOpenedHandles(IFilePtr fileToExclude = nullptr)
         {
-            OpenedHandles.erase(std::remove_if(OpenedHandles.begin(), OpenedHandles.end(), [&](const NativeFileWeakPtr<ThreadingPolicy>& weak) {
+            OpenedHandles.erase(std::remove_if(OpenedHandles.begin(), OpenedHandles.end(), [&](const NativeFileWeakPtr& weak) {
                 return weak.expired() || weak.lock() == fileToExclude;
             }), OpenedHandles.end());
         }
@@ -195,10 +193,12 @@ private:
         }
 
         if (!fs::is_directory(BasePathImpl())) {
+            printf("NativeFileSystem: Base path is not a directory: %s\n", BasePathImpl().c_str());
             return false;
         }
 
         if (!fs::exists(BasePathImpl())) { // TODO: create if not exists flag
+            printf("NativeFileSystem: Base path does not exist: %s\n", BasePathImpl().c_str());
             return false;
         }
 
@@ -271,7 +271,7 @@ private:
         }
         auto& entry = entryIt->second;
 
-        NativeFilePtr<ThreadingPolicy> file = std::make_shared<NativeFile<ThreadingPolicy>>(entry.Info);
+        NativeFilePtr file = std::make_shared<NativeFile>(entry.Info);
         if (!file || !file->Open(mode)) {
             return nullptr;
         }
@@ -408,7 +408,7 @@ private:
                 continue;
             } 
             
-            FileInfo fileInfo(aliasPath, basePath, entry.path().filename().string());                
+            FileInfo fileInfo(aliasPath, BasePathImpl(), entry.path().string());                
             outFiles.emplace(fileInfo.VirtualPath(), fileInfo);
         }
     }
@@ -439,14 +439,6 @@ private:
 
     std::unordered_map<std::string, FileEntry> m_Files;
 };
-
-using MultiThreadedNativeFileSystem = NativeFileSystem<MultiThreadedPolicy>;
-using MultiThreadedNativeFileSystemPtr = NativeFileSystemPtr<MultiThreadedPolicy>;
-using MultiThreadedNativeFileSystemWeakPtr = NativeFileSystemWeakPtr<MultiThreadedPolicy>;
-
-using SingleThreadedNativeFileSystem = NativeFileSystem<SingleThreadedPolicy>;
-using SingleThreadedNativeFileSystemPtr = NativeFileSystemPtr<SingleThreadedPolicy>;
-using SingleThreadedNativeFileSystemWeakPtr = NativeFileSystemWeakPtr<SingleThreadedPolicy>;
 
 } // namespace vfspp
 

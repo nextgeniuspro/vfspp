@@ -4,6 +4,9 @@ project(vfsppexample)
 
 add_executable(vfsppexample example.cpp)
 
+add_definitions(-DVFSPP_MT_SUPPORT_ENABLED) # Enable multi-threading support
+# add_definitions(-DVFSPP_DISABLE_STD_FILESYSTEM) # Disable std::filesystem support
+
 target_link_libraries(vfsppexample PRIVATE vfspp::vfspp)
 target_compile_features(vfsppexample PRIVATE cxx_std_20)
 

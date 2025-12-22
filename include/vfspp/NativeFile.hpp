@@ -4,21 +4,20 @@
 #include "IFile.h"
 #include "ThreadingPolicy.hpp"
 
+#ifdef VFSPP_DISABLE_STD_FILESYSTEM
+#include "FilesystemCompat.hpp"
+namespace fs = vfspp::fs_compat;
+#else
 namespace fs = std::filesystem;
+#endif
 
 namespace vfspp
 {
 
-template <typename ThreadingPolicy>
-class NativeFile;
+using NativeFilePtr = std::shared_ptr<class NativeFile>;
+using NativeFileWeakPtr = std::weak_ptr<class NativeFile>;
 
-template <typename ThreadingPolicy>
-using NativeFilePtr = std::shared_ptr<NativeFile<ThreadingPolicy>>;
 
-template <typename ThreadingPolicy>
-using NativeFileWeakPtr = std::weak_ptr<NativeFile<ThreadingPolicy>>;
-
-template <typename ThreadingPolicy>
 class NativeFile final : public IFile
 {
 public:
@@ -44,7 +43,7 @@ public:
     [[nodiscard]]
     virtual const FileInfo& GetFileInfo() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return GetFileInfoImpl();
     }
     
@@ -54,7 +53,7 @@ public:
     [[nodiscard]]
     virtual uint64_t Size() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return SizeImpl();
     }
     
@@ -64,7 +63,7 @@ public:
     [[nodiscard]]
     virtual bool IsReadOnly() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return IsReadOnlyImpl();
     }
     
@@ -74,7 +73,7 @@ public:
     [[nodiscard]]
     virtual bool Open(FileMode mode) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return OpenImpl(mode);
     }
     
@@ -83,7 +82,7 @@ public:
      */
     virtual void Close() override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         CloseImpl();
     }
     
@@ -93,7 +92,7 @@ public:
     [[nodiscard]]
     virtual bool IsOpened() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return IsOpenedImpl();
     }
     
@@ -102,7 +101,7 @@ public:
      */
     virtual uint64_t Seek(uint64_t offset, Origin origin) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return SeekImpl(offset, origin);
     }
     /*
@@ -111,7 +110,7 @@ public:
     [[nodiscard]]
     virtual uint64_t Tell() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return TellImpl();
     }
     
@@ -120,7 +119,7 @@ public:
      */
     virtual uint64_t Read(std::span<uint8_t> buffer) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return ReadImpl(buffer);
     }
 
@@ -129,7 +128,7 @@ public:
      */
     virtual uint64_t Read(std::vector<uint8_t>& buffer, uint64_t size) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return ReadImpl(buffer, size);
     }
 
@@ -138,7 +137,7 @@ public:
      */
     virtual uint64_t Write(std::span<const uint8_t> buffer) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return WriteImpl(buffer);
     }
     
@@ -147,7 +146,7 @@ public:
      */
     virtual uint64_t Write(const std::vector<uint8_t>& buffer) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return WriteImpl(buffer);
     }
 
@@ -341,14 +340,6 @@ private:
     FileMode m_Mode = FileMode::Read;
     mutable std::mutex m_Mutex;
 };
-
-using MultiThreadedNativeFile = NativeFile<MultiThreadedPolicy>;
-using MultiThreadedNativeFilePtr = NativeFilePtr<MultiThreadedPolicy>;
-using MultiThreadedNativeFileWeakPtr = NativeFileWeakPtr<MultiThreadedPolicy>;
-
-using SingleThreadedNativeFile = NativeFile<SingleThreadedPolicy>;
-using SingleThreadedNativeFilePtr = NativeFilePtr<SingleThreadedPolicy>;
-using SingleThreadedNativeFileWeakPtr = NativeFileWeakPtr<SingleThreadedPolicy>;
     
 } // namespace vfspp
 

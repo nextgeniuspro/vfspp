@@ -7,7 +7,9 @@ vfspp is a C++ Virtual File System header-only library that allows manipulation 
 ```C++
 // Register native filesystem during development or zip for distribution build
 
-auto vfs = std::make_shared<MultiThreadedVirtualFileSystem>(); // To create single threaded version, use SingleThreadedVirtualFileSystem
+// Multi-threading is enabled by defining the `VFSPP_MT_SUPPORT_ENABLED` macro at compile time
+// (for example: add `-DVFSPP_MT_SUPPORT_ENABLED` to your compiler flags).
+auto vfs = std::make_shared<VirtualFileSystem>();
 
 #if defined(DISTRIBUTION_BUILD)
 	auto rootFS = vfs->CreateFileSystem<ZipFileSystem>("/", "Resources.zip");
@@ -26,7 +28,9 @@ Here's an example of how to set up multiple filesystems:
 
 ```C++
 
-auto vfs = std::make_shared<MultiThreadedVirtualFileSystem>();
+// Multi-threading is enabled by defining the `VFSPP_MT_SUPPORT_ENABLED` macro at compile time
+// (for example: add `-DVFSPP_MT_SUPPORT_ENABLED` to your compiler flags).
+auto vfs = std::make_shared<VirtualFileSystem>();
 
 if (!vfs->CreateFileSystem<NativeFileSystem>("/", GetBundlePath() + "Documents/")) {
 	// Handle error
@@ -124,3 +128,7 @@ cmake -B ./build -G "Xcode" . -DBUILD_EXAMPLES=1
 ```
 
 - Open generated project files and build the target `vfsppexample`
+
+# What to do if your system doesn't support std::filesystem?
+
+If you system's standard library doesn't support `std::filesystem`, like Sega Dreamcast under KallistiOS, you need to specify VFSPP_DISABLE_STD_FILESYSTEM macro at compile time to use emulation layer provided by vfspp.

@@ -19,7 +19,7 @@ void PrintFileContent(const std::string& msg, IFilePtr file)
 
 int main()
 {
-    auto vfs = std::make_shared<MultiThreadedVirtualFileSystem>(); // To create single threaded version, use SingleThreadedVirtualFileSystem
+    auto vfs = std::make_shared<VirtualFileSystem>();
     
     // Native filesystem example
     printf("Native filesystem test:\n");

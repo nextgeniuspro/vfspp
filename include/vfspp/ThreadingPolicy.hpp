@@ -24,6 +24,13 @@ struct SingleThreadedPolicy {
     static DummyLock Lock(std::mutex&) noexcept { return {}; }
 };
 
+// Select default `ThreadingPolicy` based on compile-time macro.
+#if defined(VFSPP_MT_SUPPORT_ENABLED)
+using ThreadingPolicy = MultiThreadedPolicy;
+#else
+using ThreadingPolicy = SingleThreadedPolicy;
+#endif
+
 } // namespace vfspp
 
 #endif // VFSPP_THREADINGPOLICY_HPP

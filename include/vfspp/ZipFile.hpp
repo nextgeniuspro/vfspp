@@ -10,17 +10,10 @@
 namespace vfspp
 {
 
-template <typename ThreadingPolicy>
-class ZipFile;
-
-template <typename ThreadingPolicy>
-using ZipFilePtr = std::shared_ptr<ZipFile<ThreadingPolicy>>;
-
-template <typename ThreadingPolicy>
-using ZipFileWeakPtr = std::weak_ptr<ZipFile<ThreadingPolicy>>;
+using ZipFilePtr = std::shared_ptr<class ZipFile>;
+using ZipFileWeakPtr = std::weak_ptr<class ZipFile>;
 
 
-template <typename ThreadingPolicy>
 class ZipFile final : public IFile
 {
 public:
@@ -43,7 +36,7 @@ public:
     [[nodiscard]]
     virtual const FileInfo& GetFileInfo() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return GetFileInfoImpl();
     }
     
@@ -53,7 +46,7 @@ public:
     [[nodiscard]]
     virtual uint64_t Size() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return SizeImpl();
     }
     
@@ -63,7 +56,7 @@ public:
     [[nodiscard]]
     virtual bool IsReadOnly() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return IsReadOnlyImpl();
     }
     
@@ -73,7 +66,7 @@ public:
     [[nodiscard]]
     virtual bool Open(FileMode mode) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return OpenImpl(mode);
     }
     
@@ -82,7 +75,7 @@ public:
      */
     virtual void Close() override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         CloseImpl();
     }
     
@@ -92,7 +85,7 @@ public:
     [[nodiscard]]
     virtual bool IsOpened() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return IsOpenedImpl();
     }
     
@@ -101,7 +94,7 @@ public:
      */
     virtual uint64_t Seek(uint64_t offset, Origin origin) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return SeekImpl(offset, origin);
     }
     /*
@@ -110,7 +103,7 @@ public:
     [[nodiscard]]
     virtual uint64_t Tell() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return TellImpl();
     }
     
@@ -119,7 +112,7 @@ public:
      */
     virtual uint64_t Read(std::span<uint8_t> buffer) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return ReadImpl(buffer);
     }
 
@@ -128,7 +121,7 @@ public:
      */
     virtual uint64_t Read(std::vector<uint8_t>& buffer, uint64_t size) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return ReadImpl(buffer, size);
     }
 
@@ -137,7 +130,7 @@ public:
      */
     virtual uint64_t Write(std::span<const uint8_t> buffer) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return WriteImpl(buffer);
     }
     
@@ -146,7 +139,7 @@ public:
      */
     virtual uint64_t Write(const std::vector<uint8_t>& buffer) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return WriteImpl(buffer);
     }
     
@@ -340,14 +333,6 @@ private:
     uint64_t m_SeekPos = 0;
     mutable std::mutex m_Mutex;
 };
-
-using MultiThreadedZipFile = ZipFile<MultiThreadedPolicy>;
-using MultiThreadedZipFilePtr = ZipFilePtr<MultiThreadedPolicy>;
-using MultiThreadedZipFileWeakPtr = ZipFileWeakPtr<MultiThreadedPolicy>;
-
-using SingleThreadedZipFile = ZipFile<SingleThreadedPolicy>;
-using SingleThreadedZipFilePtr = ZipFilePtr<SingleThreadedPolicy>;
-using SingleThreadedZipFileWeakPtr = ZipFileWeakPtr<SingleThreadedPolicy>;
     
 } // namespace vfspp
 

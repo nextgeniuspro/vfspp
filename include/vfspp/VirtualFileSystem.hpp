@@ -8,25 +8,16 @@
 
 #include <concepts>
 #include <type_traits>
+#include <algorithm>
 
 
 namespace vfspp
 {
 
-template <typename T>
-concept FileSystemDerived = std::derived_from<T, IFileSystem>;
-
-template <typename ThreadingPolicy>
-class VirtualFileSystem;
-
-template <typename ThreadingPolicy>
-using VirtualFileSystemPtr = std::shared_ptr<VirtualFileSystem<ThreadingPolicy>>;
-
-template <typename ThreadingPolicy>
-using VirtualFileSystemWeakPtr = std::weak_ptr<VirtualFileSystem<ThreadingPolicy>>;
+using VirtualFileSystemPtr = std::shared_ptr<class VirtualFileSystem>;
+using VirtualFileSystemWeakPtr = std::weak_ptr<class VirtualFileSystem>;
     
 
-template <typename ThreadingPolicy>
 class VirtualFileSystem final
 {
 public:
@@ -40,7 +31,7 @@ public:
 
     ~VirtualFileSystem()
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         for (const auto& fs : m_FileSystems) {
             for (const auto& f : fs.second) {
                 f->Shutdown();
@@ -60,7 +51,7 @@ public:
             return;
         }
 
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
 
         m_FileSystems[alias].push_back(filesystem);
         if (std::find(m_SortedAlias.begin(), m_SortedAlias.end(), alias) == m_SortedAlias.end()) {
@@ -76,12 +67,10 @@ public:
         AddFileSystem(Alias(std::move(alias)), filesystem);
     }
 
-    template <template <typename> class FileSystemType, typename... Args>
-        requires FileSystemDerived<FileSystemType<ThreadingPolicy>>
-    [[nodiscard]] auto CreateFileSystem(const Alias& alias, Args&&... args)
-        -> std::optional<std::shared_ptr<FileSystemType<ThreadingPolicy>>>
+    template <typename FileSystemType, typename... Args>
+    [[nodiscard]] auto CreateFileSystem(const Alias& alias, Args&&... args) -> std::optional<std::shared_ptr<FileSystemType>>
     {
-        auto filesystem = std::make_shared<FileSystemType<ThreadingPolicy>>(alias.String(), std::forward<Args>(args)...);
+        auto filesystem = std::make_shared<FileSystemType>(alias.String(), std::forward<Args>(args)...);
         if (!filesystem) {
             return {};
         }
@@ -94,10 +83,8 @@ public:
         return filesystem;
     }
 
-    template <template <typename> class FileSystemType, typename... Args>
-        requires FileSystemDerived<FileSystemType<ThreadingPolicy>>
-    [[nodiscard]] auto CreateFileSystem(std::string alias, Args&&... args)
-        -> std::optional<std::shared_ptr<FileSystemType<ThreadingPolicy>>>
+    template <typename FileSystemType, typename... Args>
+    [[nodiscard]] auto CreateFileSystem(std::string alias, Args&&... args) -> std::optional<std::shared_ptr<FileSystemType>>
     {
         return CreateFileSystem<FileSystemType>(Alias(std::move(alias)), std::forward<Args>(args)...);
     }
@@ -107,12 +94,13 @@ public:
      */
     void RemoveFileSystem(const Alias& alias, IFileSystemPtr filesystem)
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
 
         auto it = m_FileSystems.find(alias);
         if (it != m_FileSystems.end()) {
-            it->second.remove(filesystem);
-            if (it->second.empty()) {
+            auto &list = it->second;
+            list.erase(std::remove(list.begin(), list.end(), filesystem), list.end());
+            if (list.empty()) {
                 m_FileSystems.erase(it);
                 m_SortedAlias.erase(std::remove(m_SortedAlias.begin(), m_SortedAlias.end(), alias), m_SortedAlias.end());
             }
@@ -130,7 +118,7 @@ public:
     [[nodiscard]]
     bool HasFileSystem(const Alias& alias, IFileSystemPtr fileSystem) const
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         auto it = m_FileSystems.find(alias);
         if (it != m_FileSystems.end()) {
             return std::find(it->second.begin(), it->second.end(), fileSystem) != it->second.end();
@@ -149,7 +137,7 @@ public:
      */
     void UnregisterAlias(const Alias& alias)
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         m_FileSystems.erase(alias);
         m_SortedAlias.erase(std::remove(m_SortedAlias.begin(), m_SortedAlias.end(), alias), m_SortedAlias.end());
     }
@@ -165,7 +153,7 @@ public:
     [[nodiscard]]
     bool IsAliasRegistered(const Alias& alias) const
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return m_FileSystems.find(alias) != m_FileSystems.end();
     }
 
@@ -181,7 +169,7 @@ public:
     [[nodiscard]]
     std::optional<std::reference_wrapper<const FileSystemList>> GetFilesystems(const Alias& alias)
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         
         return GetFilesystemsImpl(alias);
     }
@@ -231,7 +219,7 @@ public:
      */
     IFilePtr OpenFile(const std::string& virtualPath, IFile::FileMode mode)
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
 
         auto result = VisitMountedFileSystems(virtualPath, [&](IFileSystemPtr fs, bool /*isMain*/) -> std::optional<IFilePtr> {
             if (fs->IsFileExists(virtualPath)) {
@@ -250,7 +238,7 @@ public:
      */
     bool IsFileExists(const std::string& virtualPath) const
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
 
         auto result = VisitMountedFileSystems(virtualPath, [&](IFileSystemPtr fs, bool /*isMain*/) -> std::optional<bool> {
             if (fs->IsFileExists(virtualPath)) {
@@ -269,7 +257,7 @@ public:
      */
     std::vector<std::string> ListAllFiles() const
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         
         std::vector<std::string> allFiles;
         std::unordered_set<std::string> seenFiles;
@@ -316,14 +304,6 @@ private:
     std::vector<Alias> m_SortedAlias;
     mutable std::mutex m_Mutex;
 };
-
-using MultiThreadedVirtualFileSystem = VirtualFileSystem<MultiThreadedPolicy>;
-using MultiThreadedVirtualFileSystemPtr = VirtualFileSystemPtr<MultiThreadedPolicy>;
-using MultiThreadedVirtualFileSystemWeakPtr = VirtualFileSystemWeakPtr<MultiThreadedPolicy>;
-
-using SingleThreadedVirtualFileSystem = VirtualFileSystem<SingleThreadedPolicy>;
-using SingleThreadedVirtualFileSystemPtr = VirtualFileSystemPtr<SingleThreadedPolicy>;
-using SingleThreadedVirtualFileSystemWeakPtr = VirtualFileSystemWeakPtr<SingleThreadedPolicy>;
 
     
 }; // namespace vfspp

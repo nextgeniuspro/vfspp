@@ -4,33 +4,18 @@
 #include "IFile.h"
 #include "ThreadingPolicy.hpp"
 
-#include <atomic>
-
 namespace vfspp
 {
 
-class MemoryFileObject;
+using MemoryFileObjectPtr = std::shared_ptr<class MemoryFileObject>;
+using MemoryFileObjectWeakPtr = std::weak_ptr<class MemoryFileObject>;
 
-template <typename ThreadingPolicy>
-class MemoryFile;
-
-template <typename ThreadingPolicy>
-class MemoryFileSystem;
-
-using MemoryFileObjectPtr = std::shared_ptr<MemoryFileObject>;
-using MemoryFileObjectWeakPtr = std::weak_ptr<MemoryFileObject>;
-
-template <typename ThreadingPolicy>
-using MemoryFilePtr = std::shared_ptr<MemoryFile<ThreadingPolicy>>;
-
-template <typename ThreadingPolicy>
-using MemoryFileWeakPtr = std::weak_ptr<MemoryFile<ThreadingPolicy>>;
+using MemoryFilePtr = std::shared_ptr<class MemoryFile>;
+using MemoryFileWeakPtr = std::weak_ptr<class MemoryFile>;
 
 class MemoryFileObject
 {
-    template <typename>
     friend class MemoryFile;
-    template <typename>
     friend class MemoryFileSystem;
 
     using DataPtr = std::shared_ptr<std::vector<uint8_t>>;
@@ -97,10 +82,10 @@ private:
     DataPtr m_Data = std::make_shared<std::vector<uint8_t>>();
 };
 
-template <typename ThreadingPolicy>
+
+
 class MemoryFile final : public IFile
 {
-    template <typename>
     friend class MemoryFileSystem;
 
 public:
@@ -124,7 +109,7 @@ public:
     [[nodiscard]]
     virtual const FileInfo& GetFileInfo() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return GetFileInfoImpl();
     }
     
@@ -134,7 +119,7 @@ public:
     [[nodiscard]]
     virtual uint64_t Size() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return SizeImpl();
     }
     
@@ -144,7 +129,7 @@ public:
     [[nodiscard]]
     virtual bool IsReadOnly() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return IsReadOnlyImpl();
     }
     
@@ -154,7 +139,7 @@ public:
     [[nodiscard]]
     virtual bool Open(FileMode mode) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return OpenImpl(mode);
     }
     
@@ -163,7 +148,7 @@ public:
      */
     virtual void Close() override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         CloseImpl();
     }
     
@@ -173,7 +158,7 @@ public:
     [[nodiscard]]
     virtual bool IsOpened() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return IsOpenedImpl();
     }
     
@@ -182,7 +167,7 @@ public:
      */
     virtual uint64_t Seek(uint64_t offset, Origin origin) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return SeekImpl(offset, origin);
     }
     /*
@@ -191,7 +176,7 @@ public:
     [[nodiscard]]
     virtual uint64_t Tell() const override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return TellImpl();
     }
     
@@ -200,7 +185,7 @@ public:
      */
     virtual uint64_t Read(std::span<uint8_t> buffer) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return ReadImpl(buffer);
     }
 
@@ -209,7 +194,7 @@ public:
      */
     virtual uint64_t Read(std::vector<uint8_t>& buffer, uint64_t size) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return ReadImpl(buffer, size);
     }
 
@@ -218,7 +203,7 @@ public:
      */
     virtual uint64_t Write(std::span<const uint8_t> buffer) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return WriteImpl(buffer);
     }
     
@@ -227,7 +212,7 @@ public:
      */
     virtual uint64_t Write(const std::vector<uint8_t>& buffer) override
     {
-        auto lock = ThreadingPolicy::Lock(m_Mutex);
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         return WriteImpl(buffer);
     }
 
