@@ -131,4 +131,4 @@ cmake -B ./build -G "Xcode" . -DBUILD_EXAMPLES=1
 
 ## What to do if your system doesn't support std::filesystem?
 
-If you system's standard library doesn't support `std::filesystem`, like Sega Dreamcast under KallistiOS, you need to specify VFSPP_DISABLE_STD_FILESYSTEM macro at compile time to use emulation layer provided by vfspp.
+If your system's standard library doesn't support `std::filesystem`, like Sega Dreamcast under KallistiOS, you need to specify VFSPP_DISABLE_STD_FILESYSTEM macro at compile time to use emulation layer provided by vfspp.
