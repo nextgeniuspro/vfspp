@@ -18,9 +18,6 @@
 #include <assert.h>
 #include <fstream>
 #include <iostream>
-#ifndef VFSPP_DISABLE_STD_FILESYSTEM
-#include <filesystem>
-#endif
 #include <optional>
 #include <atomic>
 #include <cstring>
@@ -29,6 +26,10 @@
 #include <type_traits>
 #include <unordered_set>
 #include <system_error>
-
+#include <cstdio>
+#include <cerrno>
+#ifndef VFSPP_DISABLE_STD_FILESYSTEM
+#include <filesystem>
+#endif
 
 #endif // VFSPP_GLOBAL_H

@@ -26,9 +26,9 @@ public:
     {
     }
     
-    NativeFile(const FileInfo& fileInfo, std::fstream&& stream)
+    NativeFile(const FileInfo& fileInfo, FILE* stream)
         : m_FileInfo(fileInfo)
-        , m_Stream(std::move(stream))
+        , m_File(stream)
     {
     }
 
@@ -189,35 +189,39 @@ private:
         
         m_Mode = mode;
         
-        std::ios_base::openmode open_mode = std::ios_base::binary;
-        if (IFile::ModeHasFlag(mode, FileMode::Read)) {
-            open_mode |= std::fstream::in;
+        bool rd = IFile::ModeHasFlag(mode, FileMode::Read);
+        bool wr = IFile::ModeHasFlag(mode, FileMode::Write);
+        bool app = IFile::ModeHasFlag(mode, FileMode::Append);
+        bool trunc = IFile::ModeHasFlag(mode, FileMode::Truncate);
+
+        std::string modeStr;
+        if (rd && !wr) {
+            modeStr = "rb";
+        } else if (wr && !rd) {
+            modeStr = app ? "ab" : (trunc ? "wb" : "r+b");
+        } else if (rd && wr) {
+            modeStr = app ? "a+b" : (trunc ? "w+b" : "r+b");
+        } else {
+            modeStr = "rb";
         }
-        if (IFile::ModeHasFlag(mode, FileMode::Write)) {
-            open_mode |= std::fstream::out;
-        }
-        if (IFile::ModeHasFlag(mode, FileMode::Append)) {
-            open_mode |= std::fstream::app;
-        }
-        if (IFile::ModeHasFlag(mode, FileMode::Truncate)) {
-            open_mode |= std::fstream::trunc;
-        }
-        
-        m_Stream.open(m_FileInfo.NativePath(), open_mode);
-        return m_Stream.is_open();
+
+        // Always use stdio FILE* implementation
+        m_File = std::fopen(m_FileInfo.NativePath().c_str(), modeStr.c_str());
+        return (m_File != nullptr);
     }
 
     inline void CloseImpl()
     {
         if (IsOpenedImpl()) {
-            m_Stream.close();
+            std::fclose(m_File);
+            m_File = nullptr;
             m_Mode = FileMode::Read;
         }
     }
 
     inline bool IsOpenedImpl() const
     {
-        return m_Stream.is_open();
+        return m_File != nullptr;
     }
 
     inline uint64_t SeekImpl(uint64_t offset, Origin origin)
@@ -225,20 +229,15 @@ private:
         if (!IsOpenedImpl()) {
             return 0;
         }
-        
-        std::ios_base::seekdir dir = std::ios_base::beg;
+
+        int whence = SEEK_SET;
         if (origin == IFile::Origin::End) {
-            dir = std::ios_base::end;
+            whence = SEEK_END;
         } else if (origin == IFile::Origin::Set) {
-            dir = std::ios_base::cur;
+            whence = SEEK_CUR;
         }
-        
-        // Seek both read and write pointers to keep them synchronized
-        m_Stream.seekg(offset, dir);
-        m_Stream.seekp(offset, dir);
-        
-        if (m_Stream.fail()) {
-            m_Stream.clear();
+
+        if (std::fseek(m_File, static_cast<long>(offset), whence) != 0) {
             return 0;
         }
 
@@ -250,16 +249,9 @@ private:
         if (!IsOpenedImpl()) {
             return 0;
         }
-        
-        if (IFile::ModeHasFlag(m_Mode, FileMode::Read)) {
-            auto pos = m_Stream.tellg();
-            return (pos != std::streampos(-1)) ? static_cast<uint64_t>(pos) : 0;
-        } else if (IFile::ModeHasFlag(m_Mode, FileMode::Write)) {
-            auto pos = m_Stream.tellp();
-            return (pos != std::streampos(-1)) ? static_cast<uint64_t>(pos) : 0;
-        }
-        
-        return 0;
+
+        long pos = std::ftell(m_File);
+        return (pos != -1L) ? static_cast<uint64_t>(pos) : 0;
     }
 
     inline uint64_t ReadImpl(std::span<uint8_t> buffer)
@@ -273,30 +265,10 @@ private:
             return 0;
         }
 
-        const auto currentPos = TellImpl();
-        const auto fileSize = SizeImpl();
-                
-        if (currentPos >= fileSize) {
-            return 0;
+        size_t read = std::fread(buffer.data(), 1, static_cast<size_t>(buffer.size_bytes()), m_File);
+        if (read > 0) {
+            return static_cast<uint64_t>(read);
         }
-        const auto bytesLeft = fileSize - currentPos;
-
-        const auto requestedBytes = static_cast<uint64_t>(buffer.size_bytes());
-        if (requestedBytes == 0) {
-            return 0;
-        }
-
-        auto bytesToRead = std::min(bytesLeft, requestedBytes);
-        if (bytesToRead == 0) {
-            return 0;
-        }
-
-        m_Stream.read(reinterpret_cast<char*>(buffer.data()), bytesToRead);
-        if (m_Stream.good() || m_Stream.eof()) {
-            return static_cast<uint64_t>(m_Stream.gcount());
-        }
-        // Clear error flags for failed read
-        m_Stream.clear();
         return 0;
     }
 
@@ -316,8 +288,8 @@ private:
             return 0;
         }
 
-        m_Stream.write(reinterpret_cast<const char*>(buffer.data()), writeSize);
-        if (m_Stream.good()) {
+        size_t written = std::fwrite(buffer.data(), 1, static_cast<size_t>(writeSize), m_File);
+        if (written == writeSize) {
             return writeSize;
         }
         return 0;
@@ -336,7 +308,7 @@ private:
     
 private:
     FileInfo m_FileInfo;
-    mutable std::fstream m_Stream;
+    std::FILE* m_File = nullptr;
     FileMode m_Mode = FileMode::Read;
     mutable std::mutex m_Mutex;
 };
