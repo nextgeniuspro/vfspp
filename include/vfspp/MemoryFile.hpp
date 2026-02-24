@@ -21,7 +21,8 @@ class MemoryFileObject
     using DataPtr = std::shared_ptr<std::vector<uint8_t>>;
 
 public:
-    MemoryFileObject() 
+    MemoryFileObject()
+        : m_Data(std::make_shared<std::vector<uint8_t>>())
     {
     }
 
@@ -42,14 +43,14 @@ public:
     [[nodiscard]]
     DataPtr GetData() const noexcept 
     {
-        return std::atomic_load(&m_Data);
+        return m_Data.load();
     }
 
     // Write access (copy-on-write)
     [[nodiscard]]
     DataPtr GetWritableData() 
     {
-        auto old = std::atomic_load(&m_Data);
+        auto old = m_Data.load();
 
         if (!old || old.use_count() == 1) {
             return old;
@@ -57,13 +58,13 @@ public:
 
         // Copy when shared with someone else
         auto copy = std::make_shared<std::vector<uint8_t>>(*old);
-        std::atomic_store(&m_Data, copy);
+        m_Data.store(copy);
         return copy;
     }
 
     void Reset() noexcept 
     {
-        std::atomic_store(&m_Data, std::make_shared<std::vector<uint8_t>>());
+        m_Data.store(std::make_shared<std::vector<uint8_t>>());
     }
 
     void CopyFrom(const MemoryFileObject& other)
@@ -75,11 +76,11 @@ public:
         }
 
         auto copy = std::make_shared<std::vector<uint8_t>>(*otherData);
-        std::atomic_store(&m_Data, std::move(copy));
+        m_Data.store(std::move(copy));
     }
 
 private:
-    DataPtr m_Data = std::make_shared<std::vector<uint8_t>>();
+    std::atomic<DataPtr> m_Data;
 };
 
 
