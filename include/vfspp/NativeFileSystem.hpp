@@ -7,6 +7,10 @@
 #include "NativeFile.hpp"
 
 #ifdef VFSPP_DISABLE_STD_FILESYSTEM
+#include <dirent.h>
+#endif
+
+#ifdef VFSPP_DISABLE_STD_FILESYSTEM
 #include "FilesystemCompat.hpp"
 namespace fs = vfspp::fs_compat;
 #else
@@ -192,13 +196,8 @@ private:
             return true;
         }
 
-        if (!fs::is_directory(BasePathImpl())) {
-            printf("NativeFileSystem: Base path is not a directory: %s\n", BasePathImpl().c_str());
-            return false;
-        }
-
-        if (!fs::exists(BasePathImpl())) { // TODO: create if not exists flag
-            printf("NativeFileSystem: Base path does not exist: %s\n", BasePathImpl().c_str());
+        if (!IsDirectoryAccessible(BasePathImpl())) { // TODO: create if not exists flag
+            printf("NativeFileSystem: Base path is not accessible: %s\n", BasePathImpl().c_str());
             return false;
         }
 
@@ -398,6 +397,24 @@ private:
     {
         const auto fileIt = m_Files.find(virtualPath);
         return fileIt != m_Files.end() && fs::exists(fileIt->second.Info.NativePath());
+    }
+
+    static bool IsDirectoryAccessible(const std::string& path)
+    {
+        const bool exists = fs::exists(path);
+        const bool isDir = exists && fs::is_directory(path);
+        if (exists && isDir) {
+            return true;
+        }
+
+#ifdef VFSPP_DISABLE_STD_FILESYSTEM
+        // Support for KallistiOS
+        if (DIR* dir = ::opendir(path.c_str())) {
+            ::closedir(dir);
+            return true;
+        }
+#endif
+        return false;
     }
 
     void BuildFilelist(const std::string& aliasPath, const std::string& basePath, std::unordered_map<std::string, FileEntry>& outFiles)
