@@ -226,6 +226,10 @@ public:
                 if (IFilePtr file = fs->OpenFile(virtualPath, mode)) {
                     return file;
                 }
+            } else if (!fs->IsReadOnly() && IFile::ModeHasFlag(mode, IFile::FileMode::Write)) {
+                if (IFilePtr file = fs->OpenFile(virtualPath, mode)) {
+                    return file;
+                }
             }
             return std::nullopt;
         });

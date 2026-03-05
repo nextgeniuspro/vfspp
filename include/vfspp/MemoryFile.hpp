@@ -41,46 +41,45 @@ public:
 
     // Read access
     [[nodiscard]]
-    DataPtr GetData() const noexcept 
+    DataPtr GetData() const noexcept
     {
-        return m_Data.load();
+        std::lock_guard<std::mutex> lock(m_Mutex);
+        return m_Data;
     }
 
     // Write access (copy-on-write)
     [[nodiscard]]
-    DataPtr GetWritableData() 
+    DataPtr GetWritableData()
     {
-        auto old = m_Data.load();
-
-        if (!old || old.use_count() == 1) {
-            return old;
+        std::lock_guard<std::mutex> lock(m_Mutex);
+        if (!m_Data || m_Data.use_count() == 1) {
+            return m_Data;
         }
-
         // Copy when shared with someone else
-        auto copy = std::make_shared<std::vector<uint8_t>>(*old);
-        m_Data.store(copy);
-        return copy;
+        m_Data = std::make_shared<std::vector<uint8_t>>(*m_Data);
+        return m_Data;
     }
 
-    void Reset() noexcept 
+    void Reset() noexcept
     {
-        m_Data.store(std::make_shared<std::vector<uint8_t>>());
+        std::lock_guard<std::mutex> lock(m_Mutex);
+        m_Data = std::make_shared<std::vector<uint8_t>>();
     }
 
     void CopyFrom(const MemoryFileObject& other)
     {
         auto otherData = other.GetData();
+        std::lock_guard<std::mutex> lock(m_Mutex);
         if (!otherData) {
-            Reset();
-            return;
+            m_Data = std::make_shared<std::vector<uint8_t>>();
+        } else {
+            m_Data = std::make_shared<std::vector<uint8_t>>(*otherData);
         }
-
-        auto copy = std::make_shared<std::vector<uint8_t>>(*otherData);
-        m_Data.store(std::move(copy));
     }
 
 private:
-    std::atomic<DataPtr> m_Data;
+    mutable std::mutex m_Mutex;
+    DataPtr m_Data;
 };
 
 
