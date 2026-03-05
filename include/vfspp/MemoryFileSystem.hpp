@@ -210,10 +210,8 @@ private:
     {
         FileInfo fileInfo(AliasPathImpl(), BasePathImpl(), virtualPath);
 
-        auto [entryIt, inserted] = m_Files.try_emplace(virtualPath, fileInfo, std::make_shared<MemoryFileObject>());
-        if (!inserted) {
-            return nullptr;
-        }
+        auto entryResult = m_Files.try_emplace(virtualPath, fileInfo, std::make_shared<MemoryFileObject>());
+        auto entryIt = entryResult.first;
 
         auto& entry = entryIt->second;
         if (!entry.Object) {
