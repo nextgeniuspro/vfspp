@@ -75,9 +75,11 @@ public:
 private:
     void Configure(const std::string& aliasPath, const std::string& basePath, const std::string& fileName)
     {
-        // Remove alias path from file name if any
+        // Remove alias or base path from file name if any
         std::string strippedFileName = fileName;
-        if (!basePath.empty() && fileName.find(basePath) == 0) {
+        if (!aliasPath.empty() && fileName.find(aliasPath) == 0) {
+            strippedFileName = fileName.substr(aliasPath.length());
+        } else if (!basePath.empty() && fileName.find(basePath) == 0) {
             strippedFileName = fileName.substr(basePath.length());
         }
 
