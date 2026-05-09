@@ -437,8 +437,8 @@ private:
         std::string currentPath = includeSelf ? virtualPath : ParentPath(virtualPath);
         std::vector<std::string> missingDirectories;
 
-        while (!currentPath.empty()) {
-            if (currentPath == AliasPathImpl()) {
+        while (!currentPath.empty() && currentPath != "/") {
+            if (currentPath == AliasPathImpl() || currentPath + "/" == AliasPathImpl()) {
                 break;
             }
 

@@ -9,6 +9,9 @@
 #include <concepts>
 #include <type_traits>
 #include <algorithm>
+#include <optional>
+#include <string_view>
+#include <unordered_set>
 
 
 namespace vfspp
@@ -212,6 +215,50 @@ private:
     }
 
 public:
+    static std::string NormalizeVirtualDirectoryPath(std::string_view virtualPath)
+    {
+        if (virtualPath.empty()) {
+            return "/";
+        }
+
+        std::string normalized(virtualPath);
+        while (normalized.size() > 1 && normalized.back() == '/') {
+            normalized.pop_back();
+        }
+
+        if (normalized.empty() || normalized.front() != '/') {
+            normalized.insert(normalized.begin(), '/');
+        }
+
+        return normalized;
+    }
+
+    static bool IsPathWithinBaseDirectory(std::string_view virtualPath, std::string_view baseDirectory)
+    {
+        const std::string normalizedBaseDirectory = NormalizeVirtualDirectoryPath(baseDirectory);
+        if (normalizedBaseDirectory == "/") {
+            return !virtualPath.empty() && virtualPath.front() == '/';
+        }
+
+        return virtualPath == normalizedBaseDirectory
+            || (virtualPath.size() > normalizedBaseDirectory.size()
+                && virtualPath.substr(0, normalizedBaseDirectory.size()) == normalizedBaseDirectory
+                && virtualPath[normalizedBaseDirectory.size()] == '/');
+    }
+
+    static bool IsPathDirectChildOfBaseDirectory(std::string_view virtualPath, std::string_view baseDirectory)
+    {
+        const std::string normalizedBaseDirectory = NormalizeVirtualDirectoryPath(baseDirectory);
+        if (!IsPathWithinBaseDirectory(virtualPath, normalizedBaseDirectory) || virtualPath == normalizedBaseDirectory) {
+            return false;
+        }
+
+        const size_t childStart = normalizedBaseDirectory == "/"
+            ? 1
+            : normalizedBaseDirectory.size() + 1;
+        return virtualPath.find('/', childStart) == std::string::npos;
+    }
+
     
     /*
      * Iterate over all registered filesystems and find first ocurrences of file.
@@ -259,11 +306,17 @@ public:
      * Returns a vector of all file paths with their aliases
      * Files from later registered filesystems override earlier ones
      */
-    std::vector<std::string> ListAllEntries(bool excludeDirectories = true) const
+    std::vector<EntryInfo> ListAllEntries(bool excludeDirectories = true) const
+    {
+        return ListAllEntries("/", excludeDirectories, true);
+    }
+
+    std::vector<EntryInfo> ListAllEntries(std::string_view baseDirectory, bool excludeDirectories = true, bool recursive = true) const
     {
         [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
+        const std::string normalizedBaseDirectory = NormalizeVirtualDirectoryPath(baseDirectory);
         
-        std::vector<std::string> allFiles;
+        std::vector<EntryInfo> allFiles;
         std::unordered_set<std::string> seenFiles;
 
         for (const Alias& alias : m_SortedAlias) {
@@ -280,8 +333,18 @@ public:
 
                 for (const auto& entryInfo : fileList) {
                     const auto& virtualPath = entryInfo.VirtualPath();
+                    if (!IsPathWithinBaseDirectory(virtualPath, normalizedBaseDirectory)) {
+                        continue;
+                    }
+                    if (virtualPath == normalizedBaseDirectory) {
+                        continue;
+                    }
+                    if (!recursive && !IsPathDirectChildOfBaseDirectory(virtualPath, normalizedBaseDirectory)) {
+                        continue;
+                    }
+
                     if (seenFiles.emplace(virtualPath).second) {
-                        allFiles.push_back(std::move(virtualPath));
+                        allFiles.push_back(entryInfo);
                     }
                 }
             }
