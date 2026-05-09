@@ -88,10 +88,10 @@ public:
      * Retrieve file list according filter
      */
     [[nodiscard]]
-    virtual FilesList GetFilesList() const override
+    virtual EntriesList GetEntriesList(bool excludeDirectories = true) const override
     {
         [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
-        return GetFilesListST();
+        return GetEntriesListST(excludeDirectories);
     }
     
     /*
@@ -118,6 +118,7 @@ public:
      */
     virtual IFilePtr CreateFile(const std::string& virtualPath) override
     {
+        (void)virtualPath;
         return nullptr;
     }
     
@@ -126,6 +127,7 @@ public:
      */
     virtual bool RemoveFile(const std::string& virtualPath) override
     {
+        (void)virtualPath;
         return false;
     }
     
@@ -134,6 +136,9 @@ public:
      */
     virtual bool CopyFile(const std::string& srcVirtualPath, const std::string& dstVirtualPath, bool overwrite = false) override
     {
+        (void)srcVirtualPath;
+        (void)dstVirtualPath;
+        (void)overwrite;
         return false;
     }
     
@@ -142,6 +147,28 @@ public:
      */
     virtual bool RenameFile(const std::string& srcVirtualPath, const std::string& dstVirtualPath) override
     {
+        (void)srcVirtualPath;
+        (void)dstVirtualPath;
+        return false;
+    }
+
+    virtual bool CreateDirectory(const std::string& virtualPath) override
+    {
+        (void)virtualPath;
+        return false;
+    }
+
+    virtual bool RemoveDirectory(const std::string& virtualPath, bool recursive = false) override
+    {
+        (void)virtualPath;
+        (void)recursive;
+        return false;
+    }
+
+    virtual bool RenameDirectory(const std::string& srcVirtualPath, const std::string& dstVirtualPath) override
+    {
+        (void)srcVirtualPath;
+        (void)dstVirtualPath;
         return false;
     }
     /*
@@ -162,16 +189,35 @@ public:
         return IsFileExistsImpl(virtualPath);
     }
 
-private:
-    struct FileEntry
+    [[nodiscard]]
+    virtual bool IsDirectoryExists(const std::string& virtualPath) const override
     {
-        FileInfo Info;
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return IsDirectoryExistsImpl(virtualPath);
+    }
+
+private:
+    static std::string ParentPath(const std::string& path)
+    {
+        const size_t slash = path.find_last_of('/');
+        if (slash == std::string::npos) {
+            return {};
+        }
+        if (slash == 0) {
+            return "/";
+        }
+        return path.substr(0, slash);
+    }
+
+    struct Entry
+    {
+        EntryInfo Info;
         std::vector<ZipFileWeakPtr> OpenedHandles;
 
         uint32_t EntryID;
         uint64_t Size;
 
-        explicit FileEntry(const FileInfo& info, uint32_t entryID, uint64_t size)
+        explicit Entry(const EntryInfo& info, uint32_t entryID, uint64_t size)
             : Info(info)
             , EntryID(entryID)
             , Size(size)
@@ -203,7 +249,7 @@ private:
             return false;
         }
 
-        BuildFilelist(AliasPathImpl(), BasePathImpl(), m_ZipArchive, m_Files);
+        BuildFilelist(AliasPathImpl(), BasePathImpl(), m_ZipArchive, m_Entries);
         m_IsInitialized = true;
         return true;
     }
@@ -211,7 +257,7 @@ private:
     inline void ShutdownImpl()
     {
         m_ZipPath = "";
-        m_Files.clear();
+        m_Entries.clear();
 
         // close zip archive
         if (m_ZipArchive) {
@@ -237,11 +283,14 @@ private:
         return m_AliasPath;
     }
 
-    inline FilesList GetFilesListST() const
+    inline EntriesList GetEntriesListST(bool excludeDirectories) const
     {
-        FilesList fileList;
-        fileList.reserve(m_Files.size());
-        for (const auto& [path, entry] : m_Files) {
+        EntriesList fileList;
+        fileList.reserve(m_Entries.size());
+        for (const auto& [path, entry] : m_Entries) {
+            if (excludeDirectories && entry.Info.IsDirectory()) {
+                continue;
+            }
             fileList.push_back(entry.Info);
         }
         return fileList;
@@ -249,8 +298,9 @@ private:
     
     inline IFilePtr OpenFileImpl(const std::string& virtualPath, IFile::FileMode mode)
     {
-        const auto entryIt = m_Files.find(virtualPath);
-        if (entryIt == m_Files.end()) {
+        const EntryInfo fileInfo(AliasPathImpl(), BasePathImpl(), virtualPath);
+        const auto entryIt = m_Entries.find(fileInfo.VirtualPath());
+        if (entryIt == m_Entries.end() || entryIt->second.Info.IsDirectory()) {
             return nullptr;
         }
         auto& entry = entryIt->second;
@@ -272,50 +322,99 @@ private:
 
     inline bool IsFileExistsImpl(const std::string& virtualPath) const
     {
-        return m_Files.find(virtualPath) != m_Files.end();
+        const EntryInfo fileInfo(AliasPathImpl(), BasePathImpl(), virtualPath);
+        const auto it = m_Entries.find(fileInfo.VirtualPath());
+        return it != m_Entries.end() && it->second.Info.IsFile();
     }
 
-    void BuildFilelist(const std::string& aliasPath, const std::string& basePath, std::shared_ptr<mz_zip_archive> zipArchive, std::unordered_map<std::string, FileEntry>& outFiles)
+    inline bool IsDirectoryExistsImpl(const std::string& virtualPath) const
+    {
+        const EntryInfo directoryInfo(AliasPathImpl(), BasePathImpl(), virtualPath, EntryType::Directory);
+        const auto it = m_Entries.find(directoryInfo.VirtualPath());
+        return it != m_Entries.end() && it->second.Info.IsDirectory();
+    }
+
+    void InsertMissingAncestorDirectories(const EntryInfo& entryInfo, std::unordered_map<std::string, Entry>& outEntries)
+    {
+        std::string currentPath = ParentPath(entryInfo.VirtualPath());
+        std::vector<std::string> missingDirectories;
+
+        while (!currentPath.empty()) {
+            if (currentPath == AliasPathImpl()) {
+                break;
+            }
+
+            if (outEntries.find(currentPath) != outEntries.end()) {
+                currentPath = ParentPath(currentPath);
+                continue;
+            }
+
+            missingDirectories.push_back(currentPath);
+            currentPath = ParentPath(currentPath);
+        }
+
+        for (auto it = missingDirectories.rbegin(); it != missingDirectories.rend(); ++it) {
+            EntryInfo directoryInfo(AliasPathImpl(), BasePathImpl(), *it, EntryType::Directory);
+            outEntries.emplace(directoryInfo.VirtualPath(), Entry(directoryInfo, 0, 0));
+        }
+    }
+
+    void BuildFilelist(const std::string& aliasPath, const std::string& basePath, std::shared_ptr<mz_zip_archive> zipArchive, std::unordered_map<std::string, Entry>& outEntries)
     {
         for (mz_uint i = 0; i < mz_zip_reader_get_num_files(zipArchive.get()); i++) {
             mz_zip_archive_file_stat file_stat;
             if (!mz_zip_reader_file_stat(zipArchive.get(), i, &file_stat)) {
-                // TODO: log error
                 continue;
             }
 
-            // Skip directories (entries ending with '/')
             std::string filename = file_stat.m_filename;
-            if (!filename.empty() && filename.back() == '/') {
+            const bool isDirectory = !filename.empty() && filename.back() == '/';
+            EntryInfo entryInfo(aliasPath, basePath, filename, isDirectory ? EntryType::Directory : EntryType::File);
+            if (entryInfo.VirtualPath() == AliasPathImpl()) {
                 continue;
             }
 
-            FileInfo fileInfo(aliasPath, basePath, filename);
-            outFiles.emplace(
-                fileInfo.VirtualPath(),
-                FileEntry(
-                    fileInfo,
+            outEntries.insert_or_assign(
+                entryInfo.VirtualPath(),
+                Entry(
+                    entryInfo,
                     static_cast<uint32_t>(file_stat.m_file_index),
-                    static_cast<uint64_t>(file_stat.m_uncomp_size)
+                    isDirectory ? 0 : static_cast<uint64_t>(file_stat.m_uncomp_size)
                 )
             );
+        }
+
+        for (mz_uint i = 0; i < mz_zip_reader_get_num_files(zipArchive.get()); i++) {
+            mz_zip_archive_file_stat file_stat;
+            if (!mz_zip_reader_file_stat(zipArchive.get(), i, &file_stat)) {
+                continue;
+            }
+
+            std::string filename = file_stat.m_filename;
+            const bool isDirectory = !filename.empty() && filename.back() == '/';
+            EntryInfo entryInfo(aliasPath, basePath, filename, isDirectory ? EntryType::Directory : EntryType::File);
+            if (entryInfo.VirtualPath() == AliasPathImpl()) {
+                continue;
+            }
+
+            InsertMissingAncestorDirectories(entryInfo, outEntries);
         }
     }
 
     inline void CloseFileAndCleanupOpenedHandles(IFilePtr fileToClose = nullptr)
     {
         if (fileToClose) {
-            const auto absolutePath = fileToClose->GetFileInfo().VirtualPath();
+            const auto absolutePath = fileToClose->GetEntryInfo().VirtualPath();
             
-            const auto it = m_Files.find(absolutePath);
-            if (it == m_Files.end()) {
+            const auto it = m_Entries.find(absolutePath);
+            if (it == m_Entries.end()) {
                 return;
             }
             
             fileToClose->Close();
         }
 
-        for (auto& [path, entry] : m_Files) {
+        for (auto& [path, entry] : m_Entries) {
             entry.CleanupOpenedHandles(fileToClose);
         }
     }
@@ -328,7 +427,7 @@ private:
     bool m_IsInitialized = false;
     mutable std::mutex m_Mutex;
 
-    std::unordered_map<std::string, FileEntry> m_Files;
+    std::unordered_map<std::string, Entry> m_Entries;
 };
 
 } // namespace vfspp

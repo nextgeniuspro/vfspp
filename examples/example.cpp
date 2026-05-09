@@ -64,7 +64,7 @@ int main()
         return 1;
     }
 
-    const auto& files = zipFSResult.value()->GetFilesList();
+    const auto& files = zipFSResult.value()->GetEntriesList(false);
     for (const auto& file : files) {
         printf("Zip file entry: %s\n", file.VirtualPath().c_str());
     }

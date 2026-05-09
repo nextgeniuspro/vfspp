@@ -2,7 +2,7 @@
 #define VFSPP_IFILE_H
 
 #include "Global.h"
-#include "FileInfo.hpp"
+#include "EntryInfo.hpp"
 
 #include <span>
 
@@ -45,7 +45,7 @@ public:
      * Get file information
      */
     [[nodiscard]]
-    virtual const FileInfo& GetFileInfo() const = 0;
+    virtual const EntryInfo& GetEntryInfo() const = 0;
     
     /*
      * Returns file size
@@ -146,7 +146,7 @@ inline bool operator==(IFilePtr f1, IFilePtr f2)
         return false;
     }
     
-    return f1->GetFileInfo() == f2->GetFileInfo();
+    return f1->GetEntryInfo() == f2->GetEntryInfo();
 }
 
 // Overload bitwise operators for FileMode enum class

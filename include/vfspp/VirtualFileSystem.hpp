@@ -259,7 +259,7 @@ public:
      * Returns a vector of all file paths with their aliases
      * Files from later registered filesystems override earlier ones
      */
-    std::vector<std::string> ListAllFiles() const
+    std::vector<std::string> ListAllEntries(bool excludeDirectories = true) const
     {
         [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
         
@@ -276,10 +276,10 @@ public:
             for (auto it = filesystems.rbegin(); it != filesystems.rend(); ++it) {
 
                 IFileSystemPtr fs = *it;
-                const IFileSystem::FilesList& fileList = fs->GetFilesList();
+                const IFileSystem::EntriesList& fileList = fs->GetEntriesList(excludeDirectories);
 
-                for (const auto& fileInfo : fileList) {
-                    const auto& virtualPath = fileInfo.VirtualPath();
+                for (const auto& entryInfo : fileList) {
+                    const auto& virtualPath = entryInfo.VirtualPath();
                     if (seenFiles.emplace(virtualPath).second) {
                         allFiles.push_back(std::move(virtualPath));
                     }
@@ -289,6 +289,62 @@ public:
 
         std::sort(allFiles.begin(), allFiles.end());
         return allFiles;
+    }
+
+    bool CreateDirectory(const std::string& virtualPath)
+    {
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
+
+        auto result = VisitMountedFileSystems(virtualPath, [&](IFileSystemPtr fs, bool /*isMain*/) -> std::optional<bool> {
+            if (!fs->IsReadOnly() && fs->CreateDirectory(virtualPath)) {
+                return true;
+            }
+            return std::nullopt;
+        });
+
+        return result.value_or(false);
+    }
+
+    bool RemoveDirectory(const std::string& virtualPath, bool recursive = false)
+    {
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
+
+        auto result = VisitMountedFileSystems(virtualPath, [&](IFileSystemPtr fs, bool /*isMain*/) -> std::optional<bool> {
+            if (fs->IsDirectoryExists(virtualPath) && !fs->IsReadOnly() && fs->RemoveDirectory(virtualPath, recursive)) {
+                return true;
+            }
+            return std::nullopt;
+        });
+
+        return result.value_or(false);
+    }
+
+    bool RenameDirectory(const std::string& srcVirtualPath, const std::string& dstVirtualPath)
+    {
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
+
+        auto result = VisitMountedFileSystems(srcVirtualPath, [&](IFileSystemPtr fs, bool /*isMain*/) -> std::optional<bool> {
+            if (fs->IsDirectoryExists(srcVirtualPath) && !fs->IsReadOnly() && fs->RenameDirectory(srcVirtualPath, dstVirtualPath)) {
+                return true;
+            }
+            return std::nullopt;
+        });
+
+        return result.value_or(false);
+    }
+
+    bool IsDirectoryExists(const std::string& virtualPath) const
+    {
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
+
+        auto result = VisitMountedFileSystems(virtualPath, [&](IFileSystemPtr fs, bool /*isMain*/) -> std::optional<bool> {
+            if (fs->IsDirectoryExists(virtualPath)) {
+                return true;
+            }
+            return std::nullopt;
+        });
+
+        return result.value_or(false);
     }
 
 private:

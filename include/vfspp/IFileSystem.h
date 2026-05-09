@@ -12,7 +12,7 @@ using IFileSystemWeakPtr = std::weak_ptr<class IFileSystem>;
 class IFileSystem
 {
 public:
-    using FilesList = std::vector<FileInfo>;
+    using EntriesList = std::vector<EntryInfo>;
     
 public:
     IFileSystem() = default;
@@ -50,7 +50,7 @@ public:
      * Retrieve all files in filesystem. Heavy operation, avoid calling this often
      */
     [[nodiscard]]
-    virtual FilesList GetFilesList() const = 0;
+    virtual EntriesList GetEntriesList(bool excludeDirectories = true) const = 0;
     
     /*
      * Check is readonly filesystem
@@ -87,12 +87,33 @@ public:
      * Rename existing file on writable filesystem (Move file)
      */
     virtual bool RenameFile(const std::string& srcVirtualPath, const std::string& dstVirtualPath) = 0;
+
+    /*
+     * Create directory on writable filesystem
+     */
+    virtual bool CreateDirectory(const std::string& virtualPath) = 0;
+
+    /*
+     * Remove existing directory on writable filesystem
+     */
+    virtual bool RemoveDirectory(const std::string& virtualPath, bool recursive = false) = 0;
+
+    /*
+     * Rename existing directory on writable filesystem
+     */
+    virtual bool RenameDirectory(const std::string& srcVirtualPath, const std::string& dstVirtualPath) = 0;
     
     /*
      * Check if file exists on filesystem
      */
     [[nodiscard]]
     virtual bool IsFileExists(const std::string& virtualPath) const = 0;
+
+    /*
+     * Check if directory exists on filesystem
+     */
+    [[nodiscard]]
+    virtual bool IsDirectoryExists(const std::string& virtualPath) const = 0;
 };
 
 }; // namespace vfspp

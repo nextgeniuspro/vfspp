@@ -17,8 +17,8 @@ using ZipFileWeakPtr = std::weak_ptr<class ZipFile>;
 class ZipFile final : public IFile
 {
 public:
-    ZipFile(const FileInfo& fileInfo, uint32_t entryID, uint64_t size, std::shared_ptr<mz_zip_archive> zipArchive)
-        : m_FileInfo(fileInfo)
+    ZipFile(const EntryInfo& entryInfo, uint32_t entryID, uint64_t size, std::shared_ptr<mz_zip_archive> zipArchive)
+        : m_EntryInfo(entryInfo)
         , m_EntryID(entryID)
         , m_Size(size)
         , m_ZipArchive(zipArchive)
@@ -34,10 +34,10 @@ public:
      * Get file information
      */
     [[nodiscard]]
-    virtual const FileInfo& GetFileInfo() const override
+    virtual const EntryInfo& GetEntryInfo() const override
     {
         [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
-        return GetFileInfoImpl();
+        return GetEntryInfoImpl();
     }
     
     /*
@@ -144,9 +144,9 @@ public:
     }
     
 private:
-    inline const FileInfo& GetFileInfoImpl() const
+    inline const EntryInfo& GetEntryInfoImpl() const
     {
-        return m_FileInfo;
+        return m_EntryInfo;
     }
     
     inline uint64_t SizeImpl() const
@@ -311,6 +311,7 @@ private:
     
     inline uint64_t WriteImpl(std::span<const uint8_t> buffer)
     {
+        (void)buffer;
         return 0;
     }
 
@@ -322,11 +323,12 @@ private:
     
     inline uint64_t WriteImpl(const std::vector<uint8_t>& buffer)
     {
+        (void)buffer;
         return 0;
     }
 
 private:
-    FileInfo m_FileInfo;
+    EntryInfo m_EntryInfo;
     uint32_t m_EntryID;
     uint64_t m_Size;
     std::weak_ptr<mz_zip_archive> m_ZipArchive;

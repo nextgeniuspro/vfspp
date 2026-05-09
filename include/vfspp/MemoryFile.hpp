@@ -89,9 +89,9 @@ class MemoryFile final : public IFile
     friend class MemoryFileSystem;
 
 public:
-    MemoryFile(const FileInfo& fileInfo, MemoryFileObjectPtr object)
+    MemoryFile(const EntryInfo& entryInfo, MemoryFileObjectPtr object)
         : m_Object(std::move(object))
-        , m_FileInfo(fileInfo)
+        , m_EntryInfo(entryInfo)
     {
         if (!m_Object) {
             m_Object = std::make_shared<MemoryFileObject>();
@@ -107,10 +107,10 @@ public:
      * Get file information
      */
     [[nodiscard]]
-    virtual const FileInfo& GetFileInfo() const override
+    virtual const EntryInfo& GetEntryInfo() const override
     {
         [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
-        return GetFileInfoImpl();
+        return GetEntryInfoImpl();
     }
     
     /*
@@ -223,9 +223,9 @@ private:
         return *m_Object;
     }
 
-    inline const FileInfo& GetFileInfoImpl() const
+    inline const EntryInfo& GetEntryInfoImpl() const
     {
-        return m_FileInfo;
+        return m_EntryInfo;
     }
     
     inline uint64_t SizeImpl() const
@@ -392,7 +392,7 @@ private:
     
 private:
     MemoryFileObjectPtr m_Object;
-    FileInfo m_FileInfo;
+    EntryInfo m_EntryInfo;
     bool m_IsOpened = false;
     uint64_t m_SeekPos = 0;
     FileMode m_Mode = FileMode::Read;

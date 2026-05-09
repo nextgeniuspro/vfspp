@@ -21,13 +21,13 @@ using NativeFileWeakPtr = std::weak_ptr<class NativeFile>;
 class NativeFile final : public IFile
 {
 public:
-    NativeFile(const FileInfo& fileInfo)
-        : m_FileInfo(fileInfo)
+    NativeFile(const EntryInfo& entryInfo)
+        : m_EntryInfo(entryInfo)
     {
     }
     
-    NativeFile(const FileInfo& fileInfo, FILE* stream)
-        : m_FileInfo(fileInfo)
+    NativeFile(const EntryInfo& entryInfo, FILE* stream)
+        : m_EntryInfo(entryInfo)
         , m_File(stream)
     {
     }
@@ -41,10 +41,10 @@ public:
      * Get file information
      */
     [[nodiscard]]
-    virtual const FileInfo& GetFileInfo() const override
+    virtual const EntryInfo& GetEntryInfo() const override
     {
         [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
-        return GetFileInfoImpl();
+        return GetEntryInfoImpl();
     }
     
     /*
@@ -151,9 +151,9 @@ public:
     }
 
 private:
-    inline const FileInfo& GetFileInfoImpl() const
+    inline const EntryInfo& GetEntryInfoImpl() const
     {
-        return m_FileInfo;
+        return m_EntryInfo;
     }
 
     inline uint64_t SizeImpl() const
@@ -163,7 +163,7 @@ private:
         }
 
         std::error_code ec;
-        auto size = fs::file_size(m_FileInfo.NativePath(), ec);
+        auto size = fs::file_size(m_EntryInfo.NativePath(), ec);
         if (ec) {
             return 0;
         } 
@@ -206,7 +206,7 @@ private:
         }
 
         // Always use stdio FILE* implementation
-        m_File = std::fopen(m_FileInfo.NativePath().c_str(), modeStr.c_str());
+        m_File = std::fopen(m_EntryInfo.NativePath().c_str(), modeStr.c_str());
         return (m_File != nullptr);
     }
 
@@ -307,7 +307,7 @@ private:
     }
     
 private:
-    FileInfo m_FileInfo;
+    EntryInfo m_EntryInfo;
     std::FILE* m_File = nullptr;
     FileMode m_Mode = FileMode::Read;
     mutable std::mutex m_Mutex;
