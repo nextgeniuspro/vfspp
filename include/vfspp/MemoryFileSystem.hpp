@@ -184,6 +184,13 @@ public:
         return IsDirectoryExistsImpl(virtualPath);
     }
 
+    [[nodiscard]]
+    virtual std::optional<EntryInfo> GetEntryInfo(const std::string& virtualPath) const override
+    {
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return GetEntryInfoImpl(virtualPath);
+    }
+
 private:
     static std::string ParentPath(const std::string& path)
     {
@@ -430,6 +437,17 @@ private:
         const EntryInfo directoryInfo(AliasPathImpl(), BasePathImpl(), virtualPath, EntryType::Directory);
         const auto it = m_Entries.find(directoryInfo.VirtualPath());
         return it != m_Entries.end() && it->second.Info.IsDirectory();
+    }
+
+    inline std::optional<EntryInfo> GetEntryInfoImpl(const std::string& virtualPath) const
+    {
+        const EntryInfo fileInfo(AliasPathImpl(), BasePathImpl(), virtualPath);
+        const auto it = m_Entries.find(fileInfo.VirtualPath());
+        if (it == m_Entries.end()) {
+            return std::nullopt;
+        }
+
+        return it->second.Info;
     }
 
     void InsertMissingDirectoryEntries(const std::string& virtualPath, bool includeSelf = false)

@@ -302,6 +302,18 @@ public:
     }
 
     /*
+     * Get entry information for a specific virtual path
+     */
+    std::optional<EntryInfo> GetEntry(const std::string& virtualPath) const
+    {
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
+
+        return VisitMountedFileSystems(virtualPath, [&](IFileSystemPtr fs, bool /*isMain*/) -> std::optional<EntryInfo> {
+            return fs->GetEntryInfo(virtualPath);
+        });
+    }
+
+    /*
      * List all files from all registered filesystems
      * Returns a vector of all file paths with their aliases
      * Files from later registered filesystems override earlier ones

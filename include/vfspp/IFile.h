@@ -4,7 +4,6 @@
 #include "Global.h"
 #include "EntryInfo.hpp"
 
-#include <span>
 
 namespace vfspp
 {

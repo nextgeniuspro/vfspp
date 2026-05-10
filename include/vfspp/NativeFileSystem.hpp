@@ -197,6 +197,13 @@ public:
         return IsDirectoryExistsImpl(virtualPath);
     }
 
+    [[nodiscard]]
+    virtual std::optional<EntryInfo> GetEntryInfo(const std::string& virtualPath) const override
+    {
+        [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
+        return GetEntryInfoImpl(virtualPath);
+    }
+
 private:
     struct Entry
     {
@@ -566,6 +573,26 @@ private:
         const EntryInfo directoryInfo(AliasPathImpl(), BasePathImpl(), virtualPath, EntryType::Directory);
         const auto it = m_Entries.find(directoryInfo.VirtualPath());
         return it != m_Entries.end() && it->second.Info.IsDirectory() && fs::is_directory(it->second.Info.NativePath());
+    }
+
+    inline std::optional<EntryInfo> GetEntryInfoImpl(const std::string& virtualPath) const
+    {
+        const EntryInfo fileInfo(AliasPathImpl(), BasePathImpl(), virtualPath);
+        const auto fileIt = m_Entries.find(fileInfo.VirtualPath());
+        if (fileIt == m_Entries.end()) {
+            return std::nullopt;
+        }
+
+        const EntryInfo& entryInfo = fileIt->second.Info;
+        if (entryInfo.IsFile() && fs::is_regular_file(entryInfo.NativePath())) {
+            return entryInfo;
+        }
+
+        if (entryInfo.IsDirectory() && fs::is_directory(entryInfo.NativePath())) {
+            return entryInfo;
+        }
+
+        return std::nullopt;
     }
 
     static bool IsDirectoryAccessible(const std::string& path)

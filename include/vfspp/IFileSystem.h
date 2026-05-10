@@ -114,6 +114,9 @@ public:
      */
     [[nodiscard]]
     virtual bool IsDirectoryExists(const std::string& virtualPath) const = 0;
+
+    [[nodiscard]]
+    virtual std::optional<EntryInfo> GetEntryInfo(const std::string& virtualPath) const = 0;
 };
 
 }; // namespace vfspp
