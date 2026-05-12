@@ -91,12 +91,12 @@ public:
     /*
      * Create directory on writable filesystem
      */
-    virtual bool CreateDirectory(const std::string& virtualPath) = 0;
+    virtual bool MakeDirectory(const std::string& virtualPath) = 0;
 
     /*
      * Remove existing directory on writable filesystem
      */
-    virtual bool RemoveDirectory(const std::string& virtualPath, bool recursive = false) = 0;
+    virtual bool DeleteDirectory(const std::string& virtualPath, bool recursive = false) = 0;
 
     /*
      * Rename existing directory on writable filesystem

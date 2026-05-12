@@ -152,13 +152,13 @@ public:
         return false;
     }
 
-    virtual bool CreateDirectory(const std::string& virtualPath) override
+    virtual bool MakeDirectory(const std::string& virtualPath) override
     {
         (void)virtualPath;
         return false;
     }
 
-    virtual bool RemoveDirectory(const std::string& virtualPath, bool recursive = false) override
+    virtual bool DeleteDirectory(const std::string& virtualPath, bool recursive = false) override
     {
         (void)virtualPath;
         (void)recursive;

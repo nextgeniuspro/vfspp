@@ -366,12 +366,12 @@ public:
         return allFiles;
     }
 
-    bool CreateDirectory(const std::string& virtualPath)
+    bool MakeDirectory(const std::string& virtualPath)
     {
         [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
 
         auto result = VisitMountedFileSystems(virtualPath, [&](IFileSystemPtr fs, bool /*isMain*/) -> std::optional<bool> {
-            if (!fs->IsReadOnly() && fs->CreateDirectory(virtualPath)) {
+            if (!fs->IsReadOnly() && fs->MakeDirectory(virtualPath)) {
                 return true;
             }
             return std::nullopt;
@@ -380,12 +380,12 @@ public:
         return result.value_or(false);
     }
 
-    bool RemoveDirectory(const std::string& virtualPath, bool recursive = false)
+    bool DeleteDirectory(const std::string& virtualPath, bool recursive = false)
     {
         [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
 
         auto result = VisitMountedFileSystems(virtualPath, [&](IFileSystemPtr fs, bool /*isMain*/) -> std::optional<bool> {
-            if (fs->IsDirectoryExists(virtualPath) && !fs->IsReadOnly() && fs->RemoveDirectory(virtualPath, recursive)) {
+            if (fs->IsDirectoryExists(virtualPath) && !fs->IsReadOnly() && fs->DeleteDirectory(virtualPath, recursive)) {
                 return true;
             }
             return std::nullopt;

@@ -149,16 +149,16 @@ public:
         return RenameFileImpl(srcVirtualPath, dstVirtualPath);
     }
 
-    virtual bool CreateDirectory(const std::string& virtualPath) override
+    virtual bool MakeDirectory(const std::string& virtualPath) override
     {
         [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
-        return CreateDirectoryImpl(virtualPath);
+        return MakeDirectoryImpl(virtualPath);
     }
 
-    virtual bool RemoveDirectory(const std::string& virtualPath, bool recursive = false) override
+    virtual bool DeleteDirectory(const std::string& virtualPath, bool recursive = false) override
     {
         [[maybe_unused]] auto lock = ThreadingPolicy::Lock(m_Mutex);
-        return RemoveDirectoryImpl(virtualPath, recursive);
+        return DeleteDirectoryImpl(virtualPath, recursive);
     }
 
     virtual bool RenameDirectory(const std::string& srcVirtualPath, const std::string& dstVirtualPath) override
@@ -347,7 +347,7 @@ private:
         return result;
     }
 
-    inline bool CreateDirectoryImpl(const std::string& virtualPath)
+    inline bool MakeDirectoryImpl(const std::string& virtualPath)
     {
         const EntryInfo directoryInfo(AliasPathImpl(), BasePathImpl(), virtualPath, EntryType::Directory);
         if (directoryInfo.VirtualPath() == AliasPathImpl()) {
@@ -363,7 +363,7 @@ private:
         return true;
     }
 
-    inline bool RemoveDirectoryImpl(const std::string& virtualPath, bool recursive)
+    inline bool DeleteDirectoryImpl(const std::string& virtualPath, bool recursive)
     {
         const EntryInfo directoryInfo(AliasPathImpl(), BasePathImpl(), virtualPath, EntryType::Directory);
         auto it = m_Entries.find(directoryInfo.VirtualPath());
