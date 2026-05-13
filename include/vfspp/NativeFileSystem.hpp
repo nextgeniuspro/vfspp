@@ -230,7 +230,6 @@ private:
         }
 
         if (!IsDirectoryAccessible(BasePathImpl())) { // TODO: create if not exists flag
-            printf("NativeFileSystem: Base path is not accessible: %s\n", BasePathImpl().c_str());
             return false;
         }
 
