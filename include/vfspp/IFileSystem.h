@@ -16,7 +16,7 @@ public:
     
 public:
     IFileSystem() = default;
-    ~IFileSystem() = default;
+    virtual ~IFileSystem() = default;
     
     /*
      * Initialize filesystem, call this method as soon as possible
