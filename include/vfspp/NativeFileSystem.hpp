@@ -27,9 +27,10 @@ using NativeFileSystemWeakPtr = std::weak_ptr<class NativeFileSystem>;
 class NativeFileSystem final : public IFileSystem
 {
 public:
-    NativeFileSystem(const std::string& aliasPath, const std::string& basePath)
+    NativeFileSystem(const std::string& aliasPath, const std::string& basePath, bool readOnly = false)
         : m_AliasPath(aliasPath)
         , m_BasePath(basePath)
+        , m_ForceReadOnly(readOnly)
     {
     }
 
@@ -37,7 +38,7 @@ public:
     {
         Shutdown();
     }
-    
+
     /*
      * Initialize filesystem, call this method as soon as possible
      */
@@ -278,6 +279,10 @@ private:
     inline bool IsReadOnlyImpl() const
     {
         if (!IsInitializedImpl()) {
+            return true;
+        }
+
+        if (m_ForceReadOnly) {
             return true;
         }
 
@@ -781,13 +786,13 @@ private:
         }
     }
     
-private:    
+private:
+    mutable std::mutex m_Mutex;
+    std::unordered_map<std::string, Entry> m_Entries;
     std::string m_AliasPath;
     std::string m_BasePath;
+    bool m_ForceReadOnly = false;
     bool m_IsInitialized = false;
-    mutable std::mutex m_Mutex;
-
-    std::unordered_map<std::string, Entry> m_Entries;
 };
 
 } // namespace vfspp
