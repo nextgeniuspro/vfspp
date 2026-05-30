@@ -107,6 +107,54 @@ public:
     virtual uint64_t Write(const std::vector<uint8_t>& buffer) = 0;
 
     /*
+     * Typed Read overload: reads sizeof(T) * buffer.size() bytes into a span of any
+     * trivially-copyable T. 
+     */
+    template <typename T> 
+    requires std::is_trivially_copyable_v<T> && (!std::is_same_v<std::remove_cv_t<T>, uint8_t>)
+    uint64_t Read(std::span<T> buffer)
+    {
+        auto* p = reinterpret_cast<uint8_t*>(buffer.data());
+        return Read(std::span<uint8_t>(p, buffer.size_bytes()));
+    }
+
+    /*
+     * Typed Read overload: resizes the destination vector to `count` elements
+     * and reads count * sizeof(T) bytes.
+     */
+    template <typename T>
+    requires std::is_trivially_copyable_v<T> && (!std::is_same_v<std::remove_cv_t<T>, uint8_t>)
+    uint64_t Read(std::vector<T>& buffer, uint64_t count)
+    {
+        buffer.resize(static_cast<std::size_t>(count));
+        auto* p = reinterpret_cast<uint8_t*>(buffer.data());
+        return Read(std::span<uint8_t>(p, buffer.size() * sizeof(T)));
+    }
+
+    /*
+     * Typed Write overload: writes sizeof(T) * buffer.size() bytes from a span of any
+     * trivially-copyable T.
+     */
+    template <typename T>
+    requires std::is_trivially_copyable_v<T> && (!std::is_same_v<std::remove_cv_t<T>, uint8_t>)
+    uint64_t Write(std::span<const T> buffer)
+    {
+        const auto* p = reinterpret_cast<const uint8_t*>(buffer.data());
+        return Write(std::span<const uint8_t>(p, buffer.size_bytes()));
+    }
+
+    /*
+     * Typed Write overload: writes a vector of any trivially-copyable T.
+     */
+    template <typename T>
+    requires std::is_trivially_copyable_v<T> && (!std::is_same_v<std::remove_cv_t<T>, uint8_t>)
+    uint64_t Write(const std::vector<T>& buffer)
+    {
+        const auto* p = reinterpret_cast<const uint8_t*>(buffer.data());
+        return Write(std::span<const uint8_t>(p, buffer.size() * sizeof(T)));
+    }
+
+    /*
     * Helpers to check if mode has specific flag
     */
     static bool ModeHasFlag(FileMode mode, FileMode flag)
